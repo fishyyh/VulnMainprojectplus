@@ -1,5 +1,6 @@
 # VulnMain 漏洞管理系统
 
+原项目地址https://github.com/VulnMain/VulnMainProject ，在原基础上新增部分功能
 <div align="center">
 
 ![VulnMain](image/logo.png)
