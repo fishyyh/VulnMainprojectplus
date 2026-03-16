@@ -248,7 +248,8 @@ func InitDefaultData() error {
 			RoleID:   superAdminRole.ID, // 关联超级管理员角色
 		}
 		// 设置默认密码
-		admin.SetPassword("admin123")
+		adminPassword := os.Getenv("ADMIN_PASSWORD")
+		admin.SetPassword(adminPassword)
 
 		// 保存用户到数据库
 		if err := db.Create(&admin).Error; err != nil {
