@@ -35,6 +35,10 @@ func AutoMigrate() error {
 		&RolePermission{}, // 角色权限关联表，建立角色与权限的多对多关系
 		&User{},           // 用户表，存储系统用户信息
 
+		// 团队管理相关表
+		&Team{},       // 团队表，存储安全团队信息
+		&TeamMember{}, // 团队成员关联表，管理团队与用户的关系
+
 		// 项目管理相关表
 		&Project{},       // 项目表，存储安全项目信息
 		&ProjectMember{}, // 项目成员关联表，管理项目与用户的关系
@@ -52,6 +56,7 @@ func AutoMigrate() error {
 		&VulnAttachment{},       // 漏洞附件表，存储漏洞相关文件
 		&VulnComment{},          // 漏洞评论表，记录漏洞处理过程中的评论
 		&VulnTimeline{},         // 漏洞时间线表，记录漏洞处理的时间节点
+		&VulnWatcher{},          // 漏洞关注者表，存储漏洞关注者信息
 		&VulnDeadlineReminder{}, // 漏洞截止时间提醒记录表，避免重复发送提醒
 
 		// 系统管理相关表
@@ -127,6 +132,12 @@ func InitDefaultData() error {
 		{Name: "修复漏洞", Code: "vuln:fix", Module: "vuln", Action: "fix", Description: "标记漏洞为已修复"},
 		{Name: "忽略漏洞", Code: "vuln:ignore", Module: "vuln", Action: "ignore", Description: "忽略漏洞"},
 		{Name: "修改漏洞状态", Code: "vuln:change_status", Module: "vuln", Action: "change_status", Description: "修改漏洞状态"},
+
+		// 团队管理模块权限
+		{Name: "查看团队", Code: "team:view", Module: "team", Action: "view", Description: "查看团队列表和详情"},
+		{Name: "创建团队", Code: "team:create", Module: "team", Action: "create", Description: "创建新团队"},
+		{Name: "编辑团队", Code: "team:edit", Module: "team", Action: "edit", Description: "编辑团队信息"},
+		{Name: "删除团队", Code: "team:delete", Module: "team", Action: "delete", Description: "删除团队"},
 
 		// 资产管理模块权限，包含网络资产的管理操作
 		{Name: "查看资产", Code: "asset:view", Module: "asset", Action: "view", Description: "查看资产列表和详情"},
@@ -208,6 +219,7 @@ func InitDefaultData() error {
 	securityEngineerPermissions := []string{
 		"dashboard:view",                                                                            // 首页查看权限
 		"project:view",                                                                              // 项目查看权限（查看自己名下的项目）
+		"team:view",                                                                                 // 团队查看权限
 		"user:view",                                                                                 // 用户查看权限（查看研发工程师列表等）
 		"vuln:view", "vuln:create", "vuln:edit", "vuln:assign", "vuln:retest", "vuln:change_status", // 漏洞管理权限
 		"asset:view", "asset:create", "asset:edit", "asset:delete", // 资产管理权限（只能管理自己名下的资产）
