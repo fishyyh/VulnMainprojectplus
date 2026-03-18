@@ -51,6 +51,24 @@ export default function LoginPage() {
 
   // 处理 Google OAuth 回调参数
   const handleGoogleCallback = useCallback(() => {
+    const decodeGoogleAuthPayload = (encoded: string): string => {
+      // New format: base64url
+      try {
+        const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+        return atob(padded);
+      } catch {
+        // Legacy format: hex
+        const pairs = encoded.match(/.{1,2}/g);
+        if (!pairs) {
+          throw new Error('invalid google_auth payload');
+        }
+        return new TextDecoder().decode(
+          new Uint8Array(pairs.map((b) => parseInt(b, 16)))
+        );
+      }
+    };
+
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
 
@@ -64,15 +82,12 @@ export default function LoginPage() {
     const encoded = params.get('google_auth');
     if (encoded) {
       try {
-        // hex decode
-        const json = new TextDecoder().decode(
-          new Uint8Array(encoded.match(/.{1,2}/g)!.map(b => parseInt(b, 16)))
-        );
+        const json = decodeGoogleAuthPayload(encoded);
         const resp = JSON.parse(json);
         authUtils.saveLoginInfo(resp);
         Toast.success('Google 登录成功！');
         setTimeout(() => { window.location.href = '/dashboard'; }, 500);
-      } catch (e) {
+      } catch {
         Toast.error('Google 登录数据解析失败');
         window.history.replaceState({}, '', '/login/');
       }

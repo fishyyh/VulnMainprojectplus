@@ -2,7 +2,7 @@ package api
 
 import (
 	"crypto/rand"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -19,7 +19,7 @@ func GoogleAuthRedirect(c *gin.Context) {
 	// 生成随机 state 防止 CSRF
 	stateBytes := make([]byte, 16)
 	rand.Read(stateBytes)
-	state := hex.EncodeToString(stateBytes)
+	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
 	// 将 state 存到 cookie
 	c.SetCookie("oauth_state", state, 600, "/", "", false, true)
@@ -62,8 +62,33 @@ func GoogleAuthCallback(c *gin.Context) {
 		return
 	}
 
-	// 将登录信息编码后通过 URL 传给前端
-	respJSON, _ := json.Marshal(resp)
-	encodedResp := hex.EncodeToString(respJSON)
+	// 仅传前端登录必需字段，减少URL长度，避免网关头部过大导致502
+	userPayload := map[string]interface{}{
+		"id":            resp.User.ID,
+		"ID":            resp.User.ID, // 兼容前端历史字段
+		"username":      resp.User.Username,
+		"email":         resp.User.Email,
+		"real_name":     resp.User.RealName,
+		"phone":         resp.User.Phone,
+		"department":    resp.User.Department,
+		"source":        resp.User.Source,
+		"status":        resp.User.Status,
+		"last_login_at": resp.User.LastLoginAt,
+		"role_id":       resp.User.RoleID,
+		"role": map[string]interface{}{
+			"id":          resp.User.Role.ID,
+			"name":        resp.User.Role.Name,
+			"code":        resp.User.Role.Code,
+			"description": resp.User.Role.Description,
+		},
+	}
+
+	frontendResp := map[string]interface{}{
+		"token":         resp.Token,
+		"refresh_token": resp.RefreshToken,
+		"user":          userPayload,
+	}
+	respJSON, _ := json.Marshal(frontendResp)
+	encodedResp := base64.RawURLEncoding.EncodeToString(respJSON)
 	c.Redirect(http.StatusTemporaryRedirect, "/login/?google_auth="+encodedResp)
 }
