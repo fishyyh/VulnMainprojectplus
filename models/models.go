@@ -222,7 +222,7 @@ func InitDefaultData() error {
 		db.Find(&allPermissions)
 		for _, permission := range allPermissions {
 			var count int64
-			db.Model(&RolePermission{}).Where("role_id = ? AND permission_i+d = ?", adminRole.ID, permission.ID).Count(&count)
+			db.Model(&RolePermission{}).Where("role_id = ? AND permission_id = ?", adminRole.ID, permission.ID).Count(&count)
 			if count == 0 {
 				db.Create(&RolePermission{
 					RoleID:       adminRole.ID,
@@ -231,6 +231,7 @@ func InitDefaultData() error {
 			}
 		}
 	}
+
 	// 为安全工程师分配权限
 	// 安全工程师负责漏洞管理和安全审计，可以查看自己名下的项目
 	securityEngineerPermissions := []string{
@@ -246,11 +247,20 @@ func InitDefaultData() error {
 	// 为研发工程师分配权限
 	// 研发工程师主要负责漏洞修复，权限相对受限
 	devEngineerPermissions := []string{
-		"dashboard:view",                                           // 首页查看权限
-		"project:view",                                             // 项目查看权限（查看自己名下的项目）
-		"vuln:view", "vuln:edit", "vuln:fix", "vuln:change_status", // 漏洞查看、编辑、修复权限（只能处理分配给自己的漏洞）
+		"dashboard:view",                                       // 首页查看权限
+		"project:view",                                         // 项目查看权限（查看自己名下的项目）
+		"team:view", "team:create", "team:edit", "team:delete", // 团队管理权限
+		"vuln:view", "vuln:edit", "vuln:fix", "vuln:change_status", // 漏洞查看、编辑、修复权限（仅能编辑分配给自己的漏洞）
 	}
 	assignRolePermissions("dev_engineer", devEngineerPermissions)
+
+	// 为普通用户分配权限
+	normalUserPermissions := []string{
+		"dashboard:view", // 首页查看权限
+		"team:view",
+		"vuln:view", // 漏洞查看权限（可查看自己有访问权限的漏洞，如团队成员/关注者）
+	}
+	assignRolePermissions("normal_user", normalUserPermissions)
 
 	// 初始化默认管理员用户
 	// 系统启动时自动创建超级管理员账户
