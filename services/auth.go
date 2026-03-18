@@ -3,13 +3,12 @@
 package services
 
 import (
-	"errors"             // 导入错误处理包
+	"errors" // 导入错误处理包
+	"fmt"
 	"time"               // 导入时间包，用于处理登录时间
 	Init "vulnmain/Init" // 导入初始化包，获取数据库连接
 	"vulnmain/models"    // 导入模型包，使用用户和日志模型
 	"vulnmain/utils"     // 导入工具包，使用JWT相关功能
-	"fmt"
-
 )
 
 // AuthService结构体定义认证服务
@@ -123,7 +122,7 @@ ISSUE_TOKEN:
 
 // Login 本地登录入口
 func (s *AuthService) Login(req *LoginRequest) (*LoginResponse, error) {
-	return s.LocalLogin(req)
+	return nil, errors.New("账号密码登录已禁用，请使用 Google 登录")
 }
 
 // RefreshToken 刷新令牌

@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Form, Button, Toast, Typography, Divider } from '@douyinfe/semi-ui';
-import { IconUser, IconLock, IconEyeOpened, IconEyeClosed } from '@douyinfe/semi-icons';
-import { authApi, authUtils, systemApi, type LoginRequest, type SystemInfo } from '@/lib/api';
+import { Button, Toast, Typography } from '@douyinfe/semi-ui';
+import { authUtils, systemApi, type SystemInfo } from '@/lib/api';
 
 const { Title, Text } = Typography;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo>({
@@ -86,7 +84,7 @@ export default function LoginPage() {
         const resp = JSON.parse(json);
         authUtils.saveLoginInfo(resp);
         Toast.success('Google 登录成功！');
-        setTimeout(() => { window.location.href = '/dashboard'; }, 500);
+        window.location.href = '/';
       } catch {
         Toast.error('Google 登录数据解析失败');
         window.history.replaceState({}, '', '/login/');
@@ -97,53 +95,11 @@ export default function LoginPage() {
   // 检查是否已登录 & 处理 Google 回调
   useEffect(() => {
     if (typeof window !== 'undefined' && authUtils.isLoggedIn()) {
-      window.location.href = '/dashboard';
+      window.location.href = '/';
       return;
     }
     handleGoogleCallback();
   }, [handleGoogleCallback]);
-
-  // 处理登录提交
-  const handleSubmit = async (values: any) => {
-    if (!values.UserName || !values.UserName) {
-      Toast.error('请输入用户名和密码');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const loginData: LoginRequest = {
-        username: values.UserName.trim(),
-        password: values.PassWord
-      };
-
-      const response = await authApi.login(loginData);
-      
-      if (response.code === 200 && response.data) {
-        authUtils.saveLoginInfo(response.data);
-        Toast.success('登录成功！');
-        
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1000);
-      } else {
-        Toast.error(response.msg || '登录失败');
-      }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      
-      let errorMessage = '登录失败，请重试';
-      if (err.response?.data?.msg) {
-        errorMessage = err.response.data.msg;
-      } else if (err.response?.status === 401) {
-        errorMessage = '用户名或密码错误';
-      }
-      
-      Toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div style={{ 
@@ -351,200 +307,26 @@ export default function LoginPage() {
             }} />
           </div>
           
-          {/* 登录表单 */}
-          <Form onSubmit={handleSubmit} style={{ width: '100%' }}>
-            
-          {/* 用户名输入框 */}
-            <div style={{ marginBottom: isMobile ? '24px' : (isTablet ? '26px' : '28px'), position: 'relative' }}>
-            <Form.Input
-                field="UserName"  
-                placeholder="请输入用户名"
-                prefix={<IconUser style={{ color: '#3b82f6', fontSize: isMobile ? '14px' : '16px' }} />}
-              size="large"
-                rules={[{ required: true, message: '请输入用户名' }]}
-              style={{
-                  height: isMobile ? '52px' : (isTablet ? '54px' : '56px'),
-                  border: '1px solid #e2e8f0',
-                  borderRadius: isMobile ? '10px' : '12px',
-                  backgroundColor: '#ffffff',
-                  fontSize: isMobile ? '14px' : '15px',
-                  color: '#1e293b',
-                  fontWeight: '500',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-                  '--semi-color-fill-0': '#ffffff',
-                  '--semi-color-fill-1': '#f8fafc',
-                  '--semi-color-border': '#e2e8f0',
-                  '--semi-color-border-hover': '#3b82f6',
-                  '--semi-color-border-focus': '#3b82f6',
-                  '--semi-color-focus-border': '#3b82f6',
-                  '--semi-color-text-0': '#1e293b',
-                  '--semi-color-text-1': '#334155',
-                  '--semi-color-text-2': '#64748b'
-                } as any}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#3b82f6';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#e2e8f0';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
-              }}
-            />
-          </div>
-
-          {/* 密码输入框 */}
-            <div style={{ marginBottom: isMobile ? '32px' : (isTablet ? '34px' : '36px'), position: 'relative' }}>
-              <Form.Input
-                field="PassWord"
-                type={showPassword ? 'text' : 'PassWord'}
-                placeholder="请输入密码"
-                prefix={<IconLock style={{ color: '#3b82f6', fontSize: isMobile ? '14px' : '16px' }} />}
-                suffix={
-                  <button
-                    type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{ 
-                      background: 'none',
-                  border: 'none',
-                      cursor: 'pointer',
-                      padding: isMobile ? '6px' : '8px',
-                      color: '#64748b',
-                      borderRadius: '6px',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f1f5f9';
-                      e.currentTarget.style.color = '#3b82f6';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = '#64748b';
-                    }}
-                  >
-                    {showPassword ? <IconEyeClosed /> : <IconEyeOpened />}
-                  </button>
-                }
-              size="large"
-              rules={[{ required: true, message: '请输入密码' }]}
-              style={{
-                  height: isMobile ? '52px' : (isTablet ? '54px' : '56px'),
-                  border: '1px solid #e2e8f0',
-                  borderRadius: isMobile ? '10px' : '12px',
-                  backgroundColor: '#ffffff',
-                  fontSize: isMobile ? '14px' : '15px',
-                  color: '#1e293b',
-                  fontWeight: '500',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-                  '--semi-color-fill-0': '#ffffff',
-                  '--semi-color-fill-1': '#f8fafc',
-                  '--semi-color-border': '#e2e8f0',
-                  '--semi-color-border-hover': '#3b82f6',
-                  '--semi-color-border-focus': '#3b82f6',
-                  '--semi-color-focus-border': '#3b82f6',
-                  '--semi-color-text-0': '#1e293b',
-                  '--semi-color-text-1': '#334155',
-                  '--semi-color-text-2': '#64748b'
-                } as any}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#3b82f6';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#e2e8f0';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
-              }}
-            />
-          </div>
-
-          {/* 登录按钮 */}
-          <Button
-            theme="solid"
-            type="primary"
-            htmlType="submit"
-            loading={loading}
-            block
-              size="large"
-            style={{
-                height: isMobile ? '52px' : (isTablet ? '55px' : '58px'),
-                fontSize: isMobile ? '15px' : '16px',
-                fontWeight: '600',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #10b981 100%)',
-              border: 'none',
-                borderRadius: isMobile ? '12px' : '14px',
-                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.08)',
-                transition: 'all 0.3s ease',
-                letterSpacing: '0.5px',
-                position: 'relative',
-                overflow: 'hidden',
-                color: '#ffffff'
-            }}
-            onMouseEnter={(e) => {
-                if (!isMobile) {
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = '0 12px 32px rgba(59, 130, 246, 0.35), 0 4px 12px rgba(0, 0, 0, 0.12)';
-                }
-            }}
-            onMouseLeave={(e) => {
-                if (!isMobile) {
-              e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.08)';
-                }
-              }}
-            >
-              <span style={{ position: 'relative', zIndex: 1 }}>
-                {loading ? '登录中...' : '立即登录'}
-              </span>
-              {/* 按钮光效 */}
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: '-100%',
-                width: '100%',
-                height: '100%',
-                background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                transition: 'left 0.8s',
-                zIndex: 0
-              }} />
-          </Button>
-
-            {/* 记住我选项 */}
-            <div style={{ 
-              textAlign: 'left', 
-              marginTop: isMobile ? '16px' : '20px',
-              marginBottom: isMobile ? '24px' : '28px'
+          <div style={{ width: '100%' }}>
+            <div style={{
+              marginBottom: isMobile ? '24px' : '28px',
+              padding: isMobile ? '16px' : '18px',
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(16, 185, 129, 0.08))',
+              border: '1px solid rgba(59, 130, 246, 0.15)',
+              borderRadius: isMobile ? '12px' : '14px',
+              color: '#475569',
+              fontSize: isMobile ? '13px' : '14px',
+              lineHeight: 1.7
             }}>
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                cursor: 'pointer',
-                fontSize: isMobile ? '13px' : '14px',
-                color: '#64748b',
-                fontWeight: '500'
-              }}>
-                <input 
-                  type="checkbox" 
-                  style={{
-                    marginRight: isMobile ? '6px' : '8px',
-                    accentColor: '#3b82f6',
-                    transform: isMobile ? 'scale(1)' : 'scale(1.1)'
-                  }}
-                />
-                记住登录状态
-              </label>
+              当前仅开放 Google 单点登录。
+              <br />
+              账号密码登录入口已隐藏并停用。
             </div>
 
-            {/* Google 登录 */}
-            <Divider style={{ margin: isMobile ? '0 0 20px' : '0 0 24px', color: '#94a3b8', fontSize: '13px' }}>
-              或使用其他方式登录
-            </Divider>
             <Button
               block
               size="large"
+              loading={loading}
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: 8 }}>
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -565,19 +347,20 @@ export default function LoginPage() {
                 transition: 'all 0.3s ease',
                 marginBottom: isMobile ? '16px' : '20px'
               }}
-              onMouseEnter={(e: any) => {
+              onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = '#4285F4';
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(66, 133, 244, 0.15)';
               }}
-              onMouseLeave={(e: any) => {
+              onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = '#e2e8f0';
                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.06)';
               }}
               onClick={() => {
+                setLoading(true);
                 window.location.href = '/api/auth/google';
               }}
             >
-              使用 Google 账号登录
+              {loading ? '跳转到 Google...' : '使用 Google 账号登录'}
             </Button>
 
             {/* 底部提示 */}
@@ -607,8 +390,7 @@ export default function LoginPage() {
                 </div>
               )}
             </div>
-
-          </Form>
+          </div>
         </div>
       </div>
     </div>
