@@ -145,6 +145,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 			vulnViewAPI.GET("/:id/timeline", api.GetVulnTimeline) // 获取漏洞时间线
 			vulnViewAPI.GET("/:id/watchers", api.GetVulnWatchers) // 获取漏洞关注者列表
 			vulnViewAPI.POST("/:id/watchers", api.AddVulnWatcher) // 添加漏洞关注者（有查看权限即可添加）
+			vulnViewAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者（有查看权限即可移除）
 			vulnViewAPI.POST("/:id/comments", api.AddVulnComment) // 添加漏洞评论（有查看权限即可评论）
 		}
 
@@ -159,9 +160,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		vulnEditAPI := vulnAPI.Group("")
 		vulnEditAPI.Use(middleware.PermissionMiddleware("vuln:edit"))
 		{
-			vulnEditAPI.PUT("/:id", api.UpdateVuln)                                // 更新漏洞信息
-			vulnEditAPI.PUT("/:id/fix", api.FixVuln)                               // 标记漏洞为已修复
-			vulnEditAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者
+			vulnEditAPI.PUT("/:id", api.UpdateVuln)  // 更新漏洞信息
+			vulnEditAPI.PUT("/:id/fix", api.FixVuln) // 标记漏洞为已修复
 		}
 
 		// 漏洞审核权限组 - 可以审核和复测漏洞

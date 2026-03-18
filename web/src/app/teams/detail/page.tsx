@@ -467,7 +467,7 @@ export default function TeamDetailPage() {
     switch (vuln.status) {
       case 'pending':
         // 开发可以开始修复
-        if (isAdmin || (isDevEngineer && isAssignee)) {
+        if (isAdmin || isAssignee) {
           buttons.push(
             <Button key="fixing" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixing', { fix_started_at: new Date().toISOString() })}>
               开始修复
@@ -475,7 +475,7 @@ export default function TeamDetailPage() {
           );
         }
         // 开发可以驳回
-        if (isAdmin || (isDevEngineer && isAssignee)) {
+        if (isAdmin || isAssignee) {
           buttons.push(
             <Button key="reject" size="small" type="danger" onClick={() => {
               Modal.confirm({
@@ -503,7 +503,7 @@ export default function TeamDetailPage() {
         }
         break;
       case 'unfixed':
-        if (isAdmin || (isDevEngineer && isAssignee)) {
+        if (isAdmin || isAssignee) {
           buttons.push(
             <Button key="fixing" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixing', { fix_started_at: new Date().toISOString() })}>
               开始修复
@@ -526,7 +526,7 @@ export default function TeamDetailPage() {
         break;
       case 'fixing':
         // 开发提交已修复
-        if (isAdmin || (isDevEngineer && isAssignee)) {
+        if (isAdmin || isAssignee) {
           buttons.push(
             <Button key="fixed" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixed', { fixed_at: new Date().toISOString(), fixed_by: userId })}>
               提交已修复
@@ -1223,7 +1223,7 @@ export default function TeamDetailPage() {
                       key={watcher.id}
                       color="blue"
                       size="large"
-                      closable={isAdmin || isSecurityEngineer || isDevEngineer}
+                      closable={true}
                       onClose={() => handleRemoveWatcher(watcher.id)}
                     >
                       {watcher.user?.real_name || watcher.user?.username || watcher.email}

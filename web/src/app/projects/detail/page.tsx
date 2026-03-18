@@ -1252,8 +1252,8 @@ export default function ProjectDetailPage() {
             </Button>
           )}
 
-          {/* 研发工程师 - 分配给自己的漏洞操作 */}
-          {isDevEngineer && record.assignee_id === (currentUser?.ID || currentUser?.id) && (
+          {/* 被指派人 - 分配给自己的漏洞操作 */}
+          {record.assignee_id === (currentUser?.ID || currentUser?.id) && (
             <>
               {/* 未修复状态：可以开始修复或直接标记已修复 */}
               {record.status === 'unfixed' && (
