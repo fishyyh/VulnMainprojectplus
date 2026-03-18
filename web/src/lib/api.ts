@@ -1049,6 +1049,14 @@ export interface VulnUpdateRequest {
   resubmitted_by?: number;
 }
 
+export interface VulnStatusUpdateRequest {
+  status: string;
+  comment?: string;
+  reject_reason?: string;
+  resubmitted_at?: string;
+  resubmitted_by?: number;
+}
+
 // 资产创建请求类型
 export interface AssetCreateRequest {
   name: string;
@@ -1121,6 +1129,12 @@ export const vulnApi = {
   // 更新漏洞
   updateVuln: async (id: number, data: VulnUpdateRequest): Promise<ApiResponse<Vulnerability>> => {
     const response = await api.put(`/vulns/${id}`, data);
+    return response.data;
+  },
+
+  // 更新漏洞状态
+  updateVulnStatus: async (id: number, data: VulnStatusUpdateRequest): Promise<ApiResponse<Vulnerability>> => {
+    const response = await api.put(`/vulns/${id}/status`, data);
     return response.data;
   },
 

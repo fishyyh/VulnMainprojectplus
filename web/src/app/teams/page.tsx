@@ -84,9 +84,8 @@ export default function TeamsPage() {
   const [formLeaderId, setFormLeaderId] = useState<number | undefined>(undefined);
   const [formMemberIds, setFormMemberIds] = useState<number[]>([]);
 
-  // User lists for selects
-  const [securityEngineers, setSecurityEngineers] = useState<User[]>([]);
-  const [engineers, setEngineers] = useState<User[]>([]);
+  // User list for selects
+  const [selectableUsers, setSelectableUsers] = useState<User[]>([]);
 
   const getUserId = (user: User): number => {
     return user.id || user.ID;
@@ -120,16 +119,38 @@ export default function TeamsPage() {
 
   const loadUsers = async () => {
     try {
-      const [secRes, engRes] = await Promise.all([
-        userApi.getSecurityEngineers(),
-        userApi.getEngineers(),
-      ]);
-      if (secRes.code === 200 && secRes.data) {
-        setSecurityEngineers(secRes.data);
+      const pageSize = 100;
+      let page = 1;
+      let totalPages = 1;
+      const allUsers: User[] = [];
+
+      while (page <= totalPages) {
+        const response = await userApi.getUserList({
+          page,
+          page_size: pageSize,
+          status: 1,
+        });
+
+        if (response.code !== 200 || !response.data) {
+          throw new Error(response.msg || '加载用户列表失败');
+        }
+
+        allUsers.push(...(response.data.users || []));
+        const total = response.data.total || allUsers.length;
+        totalPages = Math.max(1, Math.ceil(total / pageSize));
+        page += 1;
       }
-      if (engRes.code === 200 && engRes.data) {
-        setEngineers(engRes.data);
-      }
+
+      // 去重并按姓名/用户名排序，提升下拉选择体验
+      const uniqueUsers = Array.from(
+        new Map(allUsers.map((user) => [getUserId(user), user])).values()
+      ).sort((a, b) => {
+        const nameA = a.real_name || a.username || '';
+        const nameB = b.real_name || b.username || '';
+        return nameA.localeCompare(nameB, 'zh-CN');
+      });
+
+      setSelectableUsers(uniqueUsers);
     } catch (error) {
       console.error('Error loading users:', error);
       Toast.error('加载用户列表失败');
@@ -275,12 +296,12 @@ export default function TeamsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const leaderOptions = engineers.map(user => ({
+  const leaderOptions = selectableUsers.map(user => ({
     value: getUserId(user),
     label: getUserLabel(user),
   }));
 
-  const memberOptions = engineers.map(user => ({
+  const memberOptions = selectableUsers.map(user => ({
     value: getUserId(user),
     label: getUserLabel(user),
   }));

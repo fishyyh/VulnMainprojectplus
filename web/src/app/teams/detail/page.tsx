@@ -36,6 +36,7 @@ import MarkdownViewer from '@/components/MarkdownViewer';
 import {
   teamApi,
   vulnApi,
+  userApi,
   authUtils,
   Team,
   Vulnerability,
@@ -64,6 +65,7 @@ export default function TeamDetailPage() {
 
   // Current user
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
 
   // Vuln list state
   const [vulns, setVulns] = useState<Vulnerability[]>([]);
@@ -130,6 +132,7 @@ export default function TeamDetailPage() {
     setCurrentUser(authUtils.getCurrentUser());
     if (teamId) {
       loadTeamDetail();
+      loadAssignableUsers();
     }
   }, [teamId]);
 
@@ -163,6 +166,45 @@ export default function TeamDetailPage() {
       Toast.error('加载团队详情失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAssignableUsers = async () => {
+    try {
+      const pageSize = 100;
+      let page = 1;
+      let totalPages = 1;
+      const allUsers: User[] = [];
+
+      while (page <= totalPages) {
+        const response = await userApi.getUserList({
+          page,
+          page_size: pageSize,
+          status: 1,
+        });
+
+        if (response.code !== 200 || !response.data) {
+          throw new Error(response.msg || '加载用户列表失败');
+        }
+
+        allUsers.push(...(response.data.users || []));
+        const total = response.data.total || allUsers.length;
+        totalPages = Math.max(1, Math.ceil(total / pageSize));
+        page += 1;
+      }
+
+      const uniqueUsers = Array.from(
+        new Map(allUsers.map((user) => [user.ID || user.id, user])).values()
+      ).sort((a, b) => {
+        const nameA = a.real_name || a.username || '';
+        const nameB = b.real_name || b.username || '';
+        return nameA.localeCompare(nameB, 'zh-CN');
+      });
+
+      setAssignableUsers(uniqueUsers);
+    } catch (error) {
+      console.warn('Error loading assignable users, fallback to team members:', error);
+      setAssignableUsers([]);
     }
   };
 
@@ -337,7 +379,7 @@ export default function TeamDetailPage() {
 
   const handleUpdateVulnStatus = async (vulnId: number, status: string, extraData?: any) => {
     try {
-      await vulnApi.updateVuln(vulnId, { status, ...extraData });
+      await vulnApi.updateVulnStatus(vulnId, { status, ...extraData });
       Toast.success('更新漏洞状态成功');
       loadVulns();
 
@@ -352,9 +394,9 @@ export default function TeamDetailPage() {
           console.error('刷新漏洞详情失败:', refreshError);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
-      Toast.error('更新漏洞状态失败');
+      Toast.error(error?.response?.data?.msg || '更新漏洞状态失败');
     }
   };
 
@@ -709,6 +751,11 @@ export default function TeamDetailPage() {
       .map(m => m.user);
   };
 
+  const getAssigneeUsers = (): User[] => {
+    if (assignableUsers.length > 0) return assignableUsers;
+    return getTeamMemberUsers();
+  };
+
   // ========== Rendering ==========
 
   if (loading) {
@@ -1021,7 +1068,7 @@ export default function TeamDetailPage() {
                 style={{ width: '100%' }}
                 filter
               >
-                {getTeamMemberUsers().map(user => {
+                {getAssigneeUsers().map(user => {
                   const userId = user.id || user.ID;
                   return (
                     <Select.Option key={userId} value={userId}>

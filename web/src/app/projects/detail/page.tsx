@@ -64,6 +64,7 @@ import {
   ASSET_IMPORTANCE_LEVELS,
   VulnCreateRequest,
   VulnUpdateRequest,
+  VulnStatusUpdateRequest,
   VulnTimeline,
   AssetCreateRequest,
   AssetUpdateRequest
@@ -133,7 +134,7 @@ export default function ProjectDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   // 用户列表（用于指派）
-  const [devEngineers, setDevEngineers] = useState<User[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<User[]>([]);
 
   // 当前用户信息状态
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -142,9 +143,9 @@ export default function ProjectDetailPage() {
   const [vulnDescription, setVulnDescription] = useState<string>('');
 
   const projectId = searchParams.get('id') as string;
-  const isAdmin = currentUser?.role_id === 1;
-  const isSecurityEngineer = currentUser?.role_id === 2;
-  const isDevEngineer = currentUser?.role_id === 3;
+  const isAdmin = currentUser?.role_id === 1 || currentUser?.role_id === 2;
+  const isSecurityEngineer = currentUser?.role_id === 3;
+  const isDevEngineer = currentUser?.role_id === 4;
 
   // 检查是否是项目负责人
   const isProjectOwner = project && currentUser && (project.owner_id === (currentUser.id || currentUser.ID));
@@ -161,7 +162,7 @@ export default function ProjectDetailPage() {
 
     if (projectId) {
       loadProjectDetail();
-      loadDevEngineers();
+      loadAssignableUsers();
     }
   }, [projectId]);
 
@@ -294,13 +295,42 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // 加载研发工程师列表
-  const loadDevEngineers = async () => {
+  // 加载可指派用户列表（全部启用用户）
+  const loadAssignableUsers = async () => {
     try {
-      const response = await userApi.getDevEngineers();
-      setDevEngineers(response.data || []);
+      const pageSize = 100;
+      let page = 1;
+      let totalPages = 1;
+      const allUsers: User[] = [];
+
+      while (page <= totalPages) {
+        const response = await userApi.getUserList({
+          page,
+          page_size: pageSize,
+          status: 1,
+        });
+
+        if (response.code !== 200 || !response.data) {
+          throw new Error(response.msg || '加载用户列表失败');
+        }
+
+        allUsers.push(...(response.data.users || []));
+        const total = response.data.total || allUsers.length;
+        totalPages = Math.max(1, Math.ceil(total / pageSize));
+        page += 1;
+      }
+
+      const uniqueUsers = Array.from(
+        new Map(allUsers.map((user) => [user.ID || user.id, user])).values()
+      ).sort((a, b) => {
+        const nameA = a.real_name || a.username || '';
+        const nameB = b.real_name || b.username || '';
+        return nameA.localeCompare(nameB, 'zh-CN');
+      });
+
+      setAssignableUsers(uniqueUsers);
     } catch (error) {
-      console.error('Error loading dev engineers:', error);
+      console.error('Error loading assignable users:', error);
     }
   };
 
@@ -413,7 +443,7 @@ export default function ProjectDetailPage() {
         return;
       }
 
-      const updateData: any = {
+      const updateData: VulnStatusUpdateRequest = {
         status: selectedStatus,
       };
 
@@ -422,27 +452,11 @@ export default function ProjectDetailPage() {
         updateData.comment = values.comment.trim();
       }
 
-      // 根据状态设置相应的时间戳和处理人
-      const now = new Date().toISOString();
-      const userId = currentUser?.ID || currentUser?.id;
-
-      switch (selectedStatus) {
-        case 'fixing':
-          updateData.fix_started_at = now;
-          updateData.fixer_id = userId;
-          break;
-        case 'fixed':
-          updateData.fixed_at = now;
-          updateData.fixer_id = userId;
-          break;
-        case 'rejected':
-          updateData.rejected_at = now;
-          updateData.rejected_by = userId;
-          updateData.reject_reason = values.comment.trim();
-          break;
+      if (selectedStatus === 'rejected') {
+        updateData.reject_reason = values.comment.trim();
       }
 
-      await vulnApi.updateVuln(changingVuln.id, updateData);
+      await vulnApi.updateVulnStatus(changingVuln.id, updateData);
 
       // 关闭弹窗并重置状态
       setStatusChangeModalVisible(false);
@@ -475,9 +489,9 @@ export default function ProjectDetailPage() {
 
       Toast.success('状态变更成功');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('状态变更失败:', error);
-      Toast.error('状态变更失败');
+      Toast.error(error?.response?.data?.msg || '状态变更失败');
     }
   };
 
@@ -529,7 +543,7 @@ export default function ProjectDetailPage() {
           return;
         }
         if (!values.assignee_id) {
-          Toast.error('请选择研发工程师');
+          Toast.error('请选择指派人');
           return;
         }
         if (!values.fix_deadline) {
@@ -582,7 +596,7 @@ export default function ProjectDetailPage() {
           return;
         }
         if (!vulnData.assignee_id) {
-          Toast.error('请选择研发工程师');
+          Toast.error('请选择指派人');
           return;
         }
         if (!vulnData.fix_deadline) {
@@ -654,7 +668,7 @@ export default function ProjectDetailPage() {
 
   const handleUpdateVulnStatus = async (vulnId: number, status: string, extraData?: any) => {
     try {
-      await vulnApi.updateVuln(vulnId, { status, ...extraData });
+      await vulnApi.updateVulnStatus(vulnId, { status, ...extraData });
       Toast.success('更新漏洞状态成功');
       loadVulnerabilities();
 
@@ -673,9 +687,9 @@ export default function ProjectDetailPage() {
           console.error('刷新漏洞详情失败:', refreshError);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
-      Toast.error('更新漏洞状态失败');
+      Toast.error(error?.response?.data?.msg || '更新漏洞状态失败');
     }
   };
 
@@ -683,7 +697,7 @@ export default function ProjectDetailPage() {
   const handleResubmitVuln = async (vuln: Vulnerability) => {
     try {
       // 重新提交时将状态改为未修复，并清除驳回相关信息
-      await vulnApi.updateVuln(vuln.id, {
+      await vulnApi.updateVulnStatus(vuln.id, {
         status: 'unfixed',
         reject_reason: '', // 清除驳回原因
         resubmitted_at: new Date().toISOString(),
@@ -709,9 +723,9 @@ export default function ProjectDetailPage() {
           console.error('刷新漏洞详情失败:', refreshError);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error resubmitting vulnerability:', error);
-      Toast.error('重新提交漏洞失败');
+      Toast.error(error?.response?.data?.msg || '重新提交漏洞失败');
     }
   };
 
@@ -1915,13 +1929,13 @@ export default function ProjectDetailPage() {
           <Form.Select
             field="assignee_id"
             label="指派给"
-            placeholder="请选择研发工程师"
-            rules={[{ required: true, message: '请选择研发工程师' }]}
+            placeholder="请选择指派人"
+            rules={[{ required: true, message: '请选择指派人' }]}
             disabled={isDevEngineer && !!editingVuln}
           >
-            {devEngineers.map(engineer => (
-              <Select.Option key={engineer.ID || engineer.id} value={engineer.ID || engineer.id}>
-                {engineer.real_name} ({engineer.username})
+            {assignableUsers.map(user => (
+              <Select.Option key={user.ID || user.id} value={user.ID || user.id}>
+                {user.real_name || user.username} ({user.username})
               </Select.Option>
             ))}
           </Form.Select>
