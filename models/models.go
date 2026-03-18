@@ -383,6 +383,15 @@ func InitDefaultData() error {
 		// 如果配置已存在，跳过创建，保持现有配置不变
 	}
 
+	// 每次启动优先从环境变量同步 Google 回调地址，避免历史数据库值导致 redirect_uri_mismatch
+	if redirectURL := os.Getenv("GOOGLE_REDIRECT_URL"); redirectURL != "" {
+		if err := db.Model(&SystemConfig{}).
+			Where("`key` = ?", "google.redirect_url").
+			Update("value", redirectURL).Error; err != nil {
+			return fmt.Errorf("同步 Google 回调地址失败: %v", err)
+		}
+	}
+
 	// 所有初始化完成，返回成功
 	return nil
 }

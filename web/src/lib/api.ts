@@ -399,10 +399,12 @@ export const authUtils = {
   // 根据用户对象获取角色显示名称
   getRoleDisplayNameFromUser: (user: any): string => {
     if (!user) return '未知角色';
-    if (user.role?.name) return user.role.name;
     const code = authUtils.getRoleCodeFromUser(user);
     const role = USER_ROLES.find(r => r.code === code);
-    return role?.label || '未知角色';
+    // 优先使用本地角色映射，避免后端角色名因历史编码问题出现乱码
+    if (role?.label) return role.label;
+    if (user.role?.name) return user.role.name;
+    return '未知角色';
   },
 
   // 获取角色显示名称
