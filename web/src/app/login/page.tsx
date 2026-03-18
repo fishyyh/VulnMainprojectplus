@@ -101,6 +101,11 @@ export default function LoginPage() {
   // 检查是否已登录 & 处理 Google 回调
   useEffect(() => {
     if (typeof window !== 'undefined' && authUtils.isLoggedIn()) {
+      const user = authUtils.getCurrentUser();
+      if (user && user.mfa_enabled === false) {
+        window.location.href = '/mfa/setup';
+        return;
+      }
       window.location.href = '/';
       return;
     }

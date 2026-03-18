@@ -25,6 +25,15 @@ export default function HomePage() {
     const checkAuth = setTimeout(() => {
       if (typeof window !== 'undefined') {
         if (authUtils.isLoggedIn()) {
+          const user = authUtils.getCurrentUser();
+          if (user && user.mfa_enabled === false) {
+            setLoadingText('跳转到 MFA 设置...');
+            setTimeout(() => {
+              window.location.href = '/mfa/setup';
+            }, 500);
+            return;
+          }
+
           setLoadingText('跳转到仪表板...');
           setTimeout(() => {
             window.location.href = '/dashboard';

@@ -12,6 +12,19 @@ import (
 	"github.com/gin-gonic/gin" // 导入Gin框架，用于中间件开发
 )
 
+func isMFASetupAllowedPath(path string) bool {
+	allowed := map[string]struct{}{
+		"/api/logout":     {},
+		"/api/user/info":  {},
+		"/api/mfa/status": {},
+		"/api/mfa/setup":  {},
+		"/api/mfa/enable": {},
+	}
+
+	_, ok := allowed[path]
+	return ok
+}
+
 // JWTAuthMiddleware函数创建JWT认证中间件
 // 该中间件验证请求头中的JWT令牌，并将用户信息存储到上下文中
 func JWTAuthMiddleware() gin.HandlerFunc {
@@ -82,6 +95,15 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		c.Set("user_id", user.ID)          // 用户ID
 		c.Set("username", user.Username)   // 用户名
 		c.Set("role_code", user.Role.Code) // 角色代码
+
+		if !user.MFAEnabled && !isMFASetupAllowedPath(c.Request.URL.Path) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code": 403,
+				"msg":  "请先启用MFA后再继续使用系统",
+			})
+			c.Abort()
+			return
+		}
 
 		// 继续处理请求
 		c.Next()

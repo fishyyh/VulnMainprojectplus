@@ -75,6 +75,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
     }
   }, []);
 
+  useEffect(() => {
+    if (user && user.mfa_enabled === false) {
+      router.push('/mfa/setup');
+    }
+  }, [router, user]);
+
 
 
   // 根据当前路径设置选中的菜单项

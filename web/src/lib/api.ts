@@ -60,6 +60,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (error.response?.status === 403 && error.response?.data?.msg === '请先启用MFA后再继续使用系统') {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/mfa/setup';
+      }
+    }
     if (error.response?.status === 401) {
       // token 过期或无效，清除本地存储并跳转到登录页
       if (typeof window !== 'undefined') {

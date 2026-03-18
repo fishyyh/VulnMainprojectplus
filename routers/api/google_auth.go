@@ -74,6 +74,7 @@ func GoogleAuthCallback(c *gin.Context) {
 		"source":        resp.User.Source,
 		"status":        resp.User.Status,
 		"last_login_at": resp.User.LastLoginAt,
+		"mfa_enabled":   resp.User.MFAEnabled,
 		"role_id":       resp.User.RoleID,
 		"role": map[string]interface{}{
 			"id":          resp.User.Role.ID,
@@ -86,6 +87,8 @@ func GoogleAuthCallback(c *gin.Context) {
 	frontendResp := map[string]interface{}{
 		"token":         resp.Token,
 		"refresh_token": resp.RefreshToken,
+		"mfa_required":  resp.MFARequired,
+		"mfa_token":     resp.MFAToken,
 		"user":          userPayload,
 	}
 	respJSON, _ := json.Marshal(frontendResp)
