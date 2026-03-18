@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 	Init "vulnmain/Init"
@@ -33,25 +34,36 @@ type GoogleAuthService struct{}
 func (s *GoogleAuthService) GetOAuthConfig() (*oauth2.Config, error) {
 	systemSvc := &SystemService{}
 
-	clientID, err := systemSvc.GetSystemConfig("google.client_id")
-	if err != nil || clientID.Value == "" {
-		return nil, errors.New("Google OAuth 未配置 Client ID")
+	// 兼容两种来源：
+	// 1) 系统配置表（优先）
+	// 2) 环境变量（兜底）
+	getConfigValue := func(configKey, envKey string) string {
+		cfg, err := systemSvc.GetSystemConfig(configKey)
+		if err == nil && strings.TrimSpace(cfg.Value) != "" {
+			return strings.TrimSpace(cfg.Value)
+		}
+		return strings.TrimSpace(os.Getenv(envKey))
 	}
 
-	clientSecret, err := systemSvc.GetSystemConfig("google.client_secret")
-	if err != nil || clientSecret.Value == "" {
-		return nil, errors.New("Google OAuth 未配置 Client Secret")
+	clientID := getConfigValue("google.client_id", "GOOGLE_CLIENT_ID")
+	if clientID == "" {
+		return nil, errors.New("Google OAuth 未配置 Client ID（google.client_id 或 GOOGLE_CLIENT_ID）")
 	}
 
-	redirectURL, err := systemSvc.GetSystemConfig("google.redirect_url")
-	if err != nil || redirectURL.Value == "" {
-		return nil, errors.New("Google OAuth 未配置回调地址")
+	clientSecret := getConfigValue("google.client_secret", "GOOGLE_CLIENT_SECRET")
+	if clientSecret == "" {
+		return nil, errors.New("Google OAuth 未配置 Client Secret（google.client_secret 或 GOOGLE_CLIENT_SECRET）")
+	}
+
+	redirectURL := getConfigValue("google.redirect_url", "GOOGLE_REDIRECT_URL")
+	if redirectURL == "" {
+		return nil, errors.New("Google OAuth 未配置回调地址（google.redirect_url 或 GOOGLE_REDIRECT_URL）")
 	}
 
 	return &oauth2.Config{
-		ClientID:     clientID.Value,
-		ClientSecret: clientSecret.Value,
-		RedirectURL:  redirectURL.Value,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  redirectURL,
 		Scopes:       []string{"openid", "email", "profile"},
 		Endpoint:     google.Endpoint,
 	}, nil
