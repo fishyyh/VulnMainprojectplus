@@ -35,9 +35,9 @@ import {
   userApi,
   authUtils,
   User,
+  Role,
   UserCreateRequest,
   UserUpdateRequest,
-  USER_ROLES,
   USER_STATUSES
 } from '@/lib/api';
 
@@ -45,7 +45,7 @@ const { Title, Text } = Typography;
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState(false);
@@ -67,7 +67,7 @@ export default function UsersPage() {
   // 当前用户信息状态
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const isAdmin = currentUser?.role_id === 1;
+  const isAdmin = authUtils.hasAnyRole(['super_admin', 'admin'], currentUser);
 
   // 密码验证状态
     const [createPasswordValidation, setCreatePasswordValidation] = useState<PasswordValidationResult | null>(null);
@@ -92,7 +92,8 @@ export default function UsersPage() {
 
     // 延迟一小段时间确保组件完全挂载
     const timer = setTimeout(() => {
-      if (user && user.role_id !== 1) {
+      const isManager = authUtils.hasAnyRole(['super_admin', 'admin'], user);
+      if (user && !isManager) {
         // 非管理员用户直接重定向
         window.location.href = '/dashboard';
         return;
@@ -102,7 +103,7 @@ export default function UsersPage() {
       setAuthChecked(true);
 
       // 如果是管理员，加载数据
-      if (user && user.role_id === 1) {
+      if (user && isManager) {
         loadUsers();
         loadRoles();
       }
@@ -325,18 +326,21 @@ export default function UsersPage() {
   };
 
   const getRoleName = (roleId: number) => {
-    const role = USER_ROLES.find(r => r.value === roleId);
-    return role?.label || '未知角色';
+    const role = roles.find(r => r.id === roleId);
+    if (role?.name) return role.name;
+    return authUtils.getRoleDisplayName(roleId);
   };
 
-  const getRoleColor = (roleId: number) => {
-    switch (roleId) {
-      case 1:
+  const getRoleColor = (roleCode?: string) => {
+    switch (roleCode) {
+      case 'super_admin':
         return 'red';
-      case 2:
+      case 'admin':
         return 'orange';
-      case 3:
+      case 'security_engineer':
         return 'blue';
+      case 'dev_engineer':
+        return 'green';
       default:
         return 'grey';
     }
@@ -393,9 +397,9 @@ export default function UsersPage() {
       title: '角色',
       dataIndex: 'role_id',
       key: 'role_id',
-      render: (roleId: number) => (
-        <Tag color={getRoleColor(roleId)}>
-          {getRoleName(roleId)}
+      render: (roleId: number, record: User) => (
+        <Tag color={getRoleColor(record.role?.code)}>
+          {record.role?.name || getRoleName(roleId)}
         </Tag>
       ),
     },
@@ -526,9 +530,9 @@ export default function UsersPage() {
             style={{ width: '150px' }}
           >
             <Select.Option value={undefined}>全部角色</Select.Option>
-            {USER_ROLES.map(role => (
-              <Select.Option key={role.value} value={role.value}>
-                {role.label}
+            {roles.map(role => (
+              <Select.Option key={role.id} value={role.id}>
+                {role.name}
               </Select.Option>
             ))}
           </Select>
@@ -741,9 +745,11 @@ export default function UsersPage() {
                   rules={[{ required: true, message: '请选择角色' }]}
                   style={{ marginBottom: 0 }}
                 >
-                  {USER_ROLES.filter(role => role.value !== 1 && role.value !== 5).map(role => (
-                    <Select.Option key={role.value} value={role.value}>
-                      {role.label}
+                  {roles
+                    .filter(role => role.code !== 'super_admin' && role.code !== 'normal_user')
+                    .map(role => (
+                    <Select.Option key={role.id} value={role.id}>
+                      {role.name}
                     </Select.Option>
                   ))}
                 </Form.Select>

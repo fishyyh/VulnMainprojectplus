@@ -141,6 +141,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 			vulnViewAPI.GET("", api.GetVulnList)                  // 获取漏洞列表
 			vulnViewAPI.GET("/stats", api.GetVulnStats)           // 获取漏洞统计信息
 			vulnViewAPI.GET("/:id", api.GetVuln)                  // 获取漏洞详情
+			vulnViewAPI.PUT("/:id/status", api.UpdateVulnStatus)  // 更新漏洞状态（进入业务层做细粒度校验）
 			vulnViewAPI.GET("/:id/timeline", api.GetVulnTimeline) // 获取漏洞时间线
 			vulnViewAPI.GET("/:id/watchers", api.GetVulnWatchers) // 获取漏洞关注者列表
 			vulnViewAPI.POST("/:id/watchers", api.AddVulnWatcher) // 添加漏洞关注者（有查看权限即可添加）
@@ -162,9 +163,6 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 			vulnEditAPI.PUT("/:id/fix", api.FixVuln)                               // 标记漏洞为已修复
 			vulnEditAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者
 		}
-
-		// 漏洞状态变更接口 - 复用漏洞编辑权限，兼容现网角色权限
-		vulnEditAPI.PUT("/:id/status", api.UpdateVulnStatus) // 更新漏洞状态
 
 		// 漏洞审核权限组 - 可以审核和复测漏洞
 		vulnAuditAPI := vulnAPI.Group("")

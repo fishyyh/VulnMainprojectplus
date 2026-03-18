@@ -13,6 +13,7 @@ import { authUtils } from '@/lib/api';
 
 interface User {
   id: number;
+  ID?: number;
   username: string;
   email: string;
   real_name: string;
@@ -21,6 +22,11 @@ interface User {
   status: number;
   last_login_at: string;
   role_id: number;
+  role?: {
+    code?: string;
+    name?: string;
+  };
+  role_code?: string;
 }
 
 interface SidebarProps {
@@ -64,8 +70,8 @@ export default function Sidebar({ selectedKey = 'home', onSelect }: SidebarProps
       }
     ];
 
-    // 超级管理员(role_id=1)显示所有选项
-    if (user?.role_id === 1) {
+    // 超级管理员/管理员显示所有选项
+    if (authUtils.hasAnyRole(['super_admin', 'admin'], user)) {
       return [
         ...baseItems,
         {
@@ -140,18 +146,4 @@ export default function Sidebar({ selectedKey = 'home', onSelect }: SidebarProps
   );
 }
 
-// 获取角色显示名称
-function getRoleDisplayName(roleId: number): string {
-  switch (roleId) {
-    case 1:
-      return '超级管理员';
-    case 2:
-      return '安全工程师';
-    case 3:
-      return '研发工程师';
-    case 4:
-      return '普通用户';
-    default:
-      return '未知角色';
-  }
-} 
+// 兼容保留：角色显示名称统一走authUtils.getRoleDisplayNameFromUser

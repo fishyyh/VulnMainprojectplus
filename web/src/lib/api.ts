@@ -87,8 +87,10 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string;
   refresh_token: string;
+  permissions?: string[];
   user: {
     id: number;
+    ID?: number;
     username: string;
     email: string;
     real_name: string;
@@ -97,6 +99,13 @@ export interface LoginResponse {
     status: number;
     last_login_at: string;
     role_id: number;
+    role?: {
+      id: number;
+      name: string;
+      code: string;
+      description?: string;
+    };
+    role_code?: string;
   };
 }
 
@@ -359,10 +368,41 @@ export const authUtils = {
     return user?.role_id === roleId;
   },
 
+  // 从用户对象解析角色代码（优先使用后端返回的role.code）
+  getRoleCodeFromUser: (user: any): string => {
+    if (!user) return 'unknown';
+    if (user.role?.code) return user.role.code;
+    if (user.role_code) return user.role_code;
+    const role = USER_ROLES.find(r => r.value === user.role_id);
+    return role?.code || 'unknown';
+  },
+
+  // 获取当前用户角色代码
+  getCurrentUserRoleCode: (): string => {
+    const user = authUtils.getCurrentUser();
+    return authUtils.getRoleCodeFromUser(user);
+  },
+
+  // 判断用户是否属于指定角色（支持传入指定用户，不传则用当前用户）
+  hasAnyRole: (roleCodes: string[], user?: any): boolean => {
+    const target = user || authUtils.getCurrentUser();
+    const code = authUtils.getRoleCodeFromUser(target);
+    return roleCodes.includes(code);
+  },
+
   // 获取角色代码
   getRoleCode: (roleId: number): string => {
     const role = USER_ROLES.find(r => r.value === roleId);
     return role?.code || 'unknown';
+  },
+
+  // 根据用户对象获取角色显示名称
+  getRoleDisplayNameFromUser: (user: any): string => {
+    if (!user) return '未知角色';
+    if (user.role?.name) return user.role.name;
+    const code = authUtils.getRoleCodeFromUser(user);
+    const role = USER_ROLES.find(r => r.code === code);
+    return role?.label || '未知角色';
   },
 
   // 获取角色显示名称

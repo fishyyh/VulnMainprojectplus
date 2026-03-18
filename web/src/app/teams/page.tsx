@@ -74,8 +74,9 @@ export default function TeamsPage() {
 
   // 当前用户
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const isAdmin = currentUser?.role_id === 1;
-  const isSecurityEngineer = currentUser?.role_id === 2;
+  const roleCode = authUtils.getRoleCodeFromUser(currentUser);
+  const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
+  const isSecurityEngineer = roleCode === 'security_engineer';
   const canManageTeams = isAdmin || isSecurityEngineer;
 
   // Form state

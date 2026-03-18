@@ -143,9 +143,10 @@ export default function ProjectDetailPage() {
   const [vulnDescription, setVulnDescription] = useState<string>('');
 
   const projectId = searchParams.get('id') as string;
-  const isAdmin = currentUser?.role_id === 1 || currentUser?.role_id === 2;
-  const isSecurityEngineer = currentUser?.role_id === 3;
-  const isDevEngineer = currentUser?.role_id === 4;
+  const roleCode = authUtils.getRoleCodeFromUser(currentUser);
+  const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
+  const isSecurityEngineer = roleCode === 'security_engineer';
+  const isDevEngineer = roleCode === 'dev_engineer';
 
   // 检查是否是项目负责人
   const isProjectOwner = project && currentUser && (project.owner_id === (currentUser.id || currentUser.ID));

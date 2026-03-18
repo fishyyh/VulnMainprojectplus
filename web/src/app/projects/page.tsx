@@ -84,9 +84,9 @@ export default function ProjectsPage() {
   // 当前用户信息状态
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isClient, setIsClient] = useState(false);
-  const isAdmin = currentUser?.role_id === 1;
-  const isSecurityEngineer = currentUser?.role_id === 2;
-  const isDevEngineer = currentUser?.role_id === 3;
+  const roleCode = authUtils.getRoleCodeFromUser(currentUser);
+  const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
+  const isSecurityEngineer = roleCode === 'security_engineer';
   const canManageProjects = isAdmin || isSecurityEngineer;
 
   useEffect(() => {
@@ -1405,7 +1405,7 @@ export default function ProjectsPage() {
                 >
                   {allEngineers.filter(engineer => engineer && engineer.id).map((engineer: User) => (
                     <Select.Option key={`member_${engineer.id}`} value={engineer.id}>
-                      {engineer.real_name || engineer.username} ({engineer.username}) - {authUtils.getRoleDisplayName(engineer.role_id)}
+                      {engineer.real_name || engineer.username} ({engineer.username}) - {engineer.role?.name || authUtils.getRoleDisplayNameFromUser(engineer)}
                     </Select.Option>
                   ))}
                 </Select>

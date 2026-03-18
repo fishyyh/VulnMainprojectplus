@@ -110,9 +110,10 @@ export default function TeamDetailPage() {
   // Watcher
   const [watcherEmail, setWatcherEmail] = useState('');
 
-  const isAdmin = currentUser?.role_id === 1 || currentUser?.role_id === 2; // super_admin or admin
-  const isSecurityEngineer = currentUser?.role_id === 3; // security_engineer
-  const isDevEngineer = currentUser?.role_id === 4; // dev_engineer
+  const roleCode = authUtils.getRoleCodeFromUser(currentUser);
+  const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
+  const isSecurityEngineer = roleCode === 'security_engineer';
+  const isDevEngineer = roleCode === 'dev_engineer';
 
   // ========== Helpers ==========
 

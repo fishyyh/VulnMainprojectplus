@@ -10,6 +10,7 @@ const { Title, Text } = Typography;
 
 interface User {
   id: number;
+  ID?: number;
   username: string;
   email: string;
   real_name: string;
@@ -18,6 +19,11 @@ interface User {
   status: number;
   last_login_at: string;
   role_id: number;
+  role?: {
+    code?: string;
+    name?: string;
+  };
+  role_code?: string;
 }
 
 export default function DashboardPage() {
@@ -96,20 +102,9 @@ export default function DashboardPage() {
     );
   }
 
-  // 获取角色显示名称
-  const getRoleDisplayName = (roleId: number): string => {
-    switch (roleId) {
-      case 1:
-        return '超级管理员';
-      case 2:
-        return '安全工程师';
-      case 3:
-        return '研发工程师';
-      case 4:
-        return '普通用户';
-      default:
-        return '未知角色';
-    }
+  // 获取角色显示名称（优先使用后端返回的role信息）
+  const getRoleDisplayName = (current: User): string => {
+    return authUtils.getRoleDisplayNameFromUser(current);
   };
 
   // 获取严重程度颜色
@@ -1312,14 +1307,17 @@ export default function DashboardPage() {
 
     if (!user) return renderDefaultDashboard();
 
-    switch (user.role_id) {
-      case 1: // 超级管理员
+    const roleCode = authUtils.getRoleCodeFromUser(user);
+
+    switch (roleCode) {
+      case 'super_admin':
+      case 'admin':
         return renderSuperAdminDashboard();
-      case 2: // 安全工程师
+      case 'security_engineer':
         return renderSecurityEngineerDashboard();
-      case 3: // 研发工程师
+      case 'dev_engineer':
         return renderDevEngineerDashboard();
-      default: // 普通用户
+      default:
         return renderDefaultDashboard();
     }
   };
@@ -1337,7 +1335,7 @@ export default function DashboardPage() {
           首页
         </Title>
         <Text type="secondary" style={{ fontSize: '14px' }}>
-          欢迎使用漏洞管理系统 - {user && getRoleDisplayName(user.role_id)}
+          欢迎使用漏洞管理系统 - {user && getRoleDisplayName(user)}
         </Text>
       </div>
 
