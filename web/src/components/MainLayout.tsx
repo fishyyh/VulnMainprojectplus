@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button, Avatar, Dropdown, Modal, Form, Input, Toast, Spin } from '@douyinfe/semi-ui';
 import { IconUser, IconExit, IconShield, IconEdit } from '@douyinfe/semi-icons';
-import { authUtils, userApi } from '@/lib/api';
+import { authApi, authUtils, userApi, type MFASetupResponse } from '@/lib/api';
 import PasswordStrengthIndicator from './PasswordStrengthIndicator';
 import type { PasswordValidationResult } from '@/utils/password';
 import { useSystem } from '@/contexts/SystemContext';
@@ -20,6 +20,7 @@ interface User {
   department: string;
   status: number;
   last_login_at: string;
+  mfa_enabled?: boolean;
   role_id: number;
   role?: {
     code?: string;
@@ -49,6 +50,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
     confirm_password: '',
   });
   const [passwordValidation, setPasswordValidation] = useState<PasswordValidationResult | null>(null);
+  const [mfaSetup, setMFASetup] = useState<MFASetupResponse | null>(null);
+  const [mfaCode, setMFACode] = useState('');
+  const [mfaLoading, setMFALoading] = useState(false);
   const { systemInfo } = useSystem();
   const router = useRouter();
   const pathname = usePathname();
@@ -141,7 +145,66 @@ export default function MainLayout({ children }: MainLayoutProps) {
         new_password: '',
         confirm_password: '',
       });
+      setMFASetup(null);
+      setMFACode('');
       setProfileModalVisible(true);
+    }
+  };
+
+  const handleSetupMFA = async () => {
+    setMFALoading(true);
+    try {
+      const response = await authApi.setupMFA();
+      if (response.code === 200 && response.data) {
+        setMFASetup(response.data);
+        Toast.success('MFA密钥已生成，请在 Google Authenticator 中完成绑定');
+      } else {
+        Toast.error(response.msg || '生成MFA密钥失败');
+      }
+    } catch (error: unknown) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { msg?: string } } }).response?.data?.msg === 'string'
+          ? (error as { response?: { data?: { msg?: string } } }).response?.data?.msg
+          : '生成MFA密钥失败';
+      Toast.error(message);
+    } finally {
+      setMFALoading(false);
+    }
+  };
+
+  const handleEnableMFA = async () => {
+    if (!mfaCode.trim()) {
+      Toast.error('请输入 Google Authenticator 验证码');
+      return;
+    }
+
+    setMFALoading(true);
+    try {
+      const response = await authApi.enableMFA(mfaCode.trim());
+      if (response.code === 200) {
+        const updatedUser = { ...user!, mfa_enabled: true };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setMFASetup(null);
+        setMFACode('');
+        Toast.success('MFA启用成功');
+      } else {
+        Toast.error(response.msg || 'MFA启用失败');
+      }
+    } catch (error: unknown) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { msg?: string } } }).response?.data?.msg === 'string'
+          ? (error as { response?: { data?: { msg?: string } } }).response?.data?.msg
+          : 'MFA启用失败';
+      Toast.error(message);
+    } finally {
+      setMFALoading(false);
     }
   };
 
@@ -398,6 +461,60 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 style={{ flex: 1 }}
               />
             </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--semi-color-border)', paddingTop: '24px', marginBottom: '24px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '12px' }}>
+              多因素认证
+            </div>
+            <div style={{ color: 'var(--semi-color-text-1)', lineHeight: '1.8', marginBottom: '16px' }}>
+              {user?.mfa_enabled
+                ? '当前账号已启用 Google Authenticator 二次验证。如需关闭，请联系管理员在系统设置中操作。'
+                : '启用后，登录时需要额外输入 Google Authenticator 动态验证码。'}
+            </div>
+
+            {!user?.mfa_enabled && !mfaSetup && (
+              <Button theme="solid" type="primary" loading={mfaLoading} onClick={handleSetupMFA}>
+                开始绑定 Google Authenticator
+              </Button>
+            )}
+
+            {!user?.mfa_enabled && mfaSetup && (
+              <div style={{
+                background: 'var(--semi-color-fill-0)',
+                border: '1px solid var(--semi-color-border)',
+                borderRadius: '8px',
+                padding: '16px'
+              }}>
+                <div style={{ marginBottom: '12px', color: 'var(--semi-color-text-0)' }}>
+                  请在 Google Authenticator 中选择“输入设置密钥”，然后录入以下信息：
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>账户：</strong>{mfaSetup.account}
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>发行方：</strong>{mfaSetup.issuer}
+                </div>
+                <div style={{ marginBottom: '12px', wordBreak: 'break-all' }}>
+                  <strong>密钥：</strong>{mfaSetup.secret}
+                </div>
+                <div style={{ marginBottom: '16px', color: 'var(--semi-color-text-2)', wordBreak: 'break-all' }}>
+                  otpauth URL: {mfaSetup.otpauth_url}
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <Input
+                    value={mfaCode}
+                    onChange={setMFACode}
+                    placeholder="输入 6 位验证码完成绑定"
+                    maxLength={6}
+                    style={{ flex: 1 }}
+                  />
+                  <Button theme="solid" type="primary" loading={mfaLoading} onClick={handleEnableMFA}>
+                    确认启用
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 密码修改表单 */}

@@ -21,6 +21,13 @@ type Claims struct {
 	jwt.StandardClaims        // JWT标准声明，包含过期时间等
 }
 
+type MFAClaims struct {
+	UserID             uint   `json:"user_id"`
+	Username           string `json:"username"`
+	RoleCode           string `json:"role_code"`
+	jwt.StandardClaims        // JWT标准声明，包含过期时间等
+}
+
 // GetJWTSecret函数获取JWT签名密钥
 // 从系统配置中读取密钥，如果不存在则返回默认值
 func GetJWTSecret() string {
@@ -103,6 +110,39 @@ func ParseToken(token string) (*Claims, error) {
 	}
 
 	// 解析失败或令牌无效
+	return nil, err
+}
+
+func GenerateMFAToken(user *models.User) (string, error) {
+	nowTime := time.Now()
+	expireTime := nowTime.Add(10 * time.Minute)
+
+	claims := MFAClaims{
+		UserID:   user.ID,
+		Username: user.Username,
+		RoleCode: user.Role.Code,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expireTime.Unix(),
+			IssuedAt:  nowTime.Unix(),
+			Issuer:    "vulnmain_mfa",
+		},
+	}
+
+	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return tokenClaims.SignedString([]byte(GetJWTSecret()))
+}
+
+func ParseMFAToken(token string) (*MFAClaims, error) {
+	tokenClaims, err := jwt.ParseWithClaims(token, &MFAClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(GetJWTSecret()), nil
+	})
+
+	if tokenClaims != nil {
+		if claims, ok := tokenClaims.Claims.(*MFAClaims); ok && tokenClaims.Valid {
+			return claims, nil
+		}
+	}
+
 	return nil, err
 }
 

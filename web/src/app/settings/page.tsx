@@ -27,9 +27,10 @@ import {
   IconMail,
   IconLock,
   IconUpload,
-  IconUser
+  IconUser,
+  IconShield
 } from '@douyinfe/semi-icons';
-import { systemApi, SystemConfig, ConfigUpdateRequest, weeklyReportApi, resolveImageUrl } from '@/lib/api';
+import { systemApi, SystemConfig, ConfigUpdateRequest, weeklyReportApi, resolveImageUrl, mfaAdminApi, User } from '@/lib/api';
 import { notifyPasswordPolicyUpdated } from '@/utils/password';
 import { notifySystemInfoUpdated } from '@/utils/system';
 
@@ -107,6 +108,9 @@ export default function SettingsPage() {
   // PDF预览相关状态
   const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
   const [previewPdfUrl, setPreviewPdfUrl] = useState('');
+  const [mfaUsers, setMFAUsers] = useState<User[]>([]);
+  const [mfaLoading, setMFALoading] = useState(false);
+  const [disablingMFAUserID, setDisablingMFAUserID] = useState<number | null>(null);
 
   // 加载系统配置
   const loadConfigs = async () => {
@@ -746,6 +750,59 @@ export default function SettingsPage() {
     }
   };
 
+  const loadMFAUsers = async () => {
+    setMFALoading(true);
+    try {
+      const response = await mfaAdminApi.listEnabledUsers();
+      if (response.code === 200 && response.data) {
+        setMFAUsers(response.data);
+      } else {
+        Toast.error(response.msg || '加载MFA用户失败');
+      }
+    } catch (error: unknown) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { msg?: string } } }).response?.data?.msg === 'string'
+          ? (error as { response?: { data?: { msg?: string } } }).response?.data?.msg
+          : '加载MFA用户失败';
+      Toast.error(message);
+    } finally {
+      setMFALoading(false);
+    }
+  };
+
+  const handleDisableUserMFA = async (user: User) => {
+    const targetID = user.id || user.ID;
+    if (!targetID) {
+      Toast.error('用户ID无效');
+      return;
+    }
+
+    setDisablingMFAUserID(targetID);
+    try {
+      const response = await mfaAdminApi.disableUserMFA(targetID);
+      if (response.code === 200) {
+        Toast.success(`已关闭 ${user.real_name || user.username} 的 MFA`);
+        loadMFAUsers();
+      } else {
+        Toast.error(response.msg || '关闭MFA失败');
+      }
+    } catch (error: unknown) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { msg?: string } } }).response?.data?.msg === 'string'
+          ? (error as { response?: { data?: { msg?: string } } }).response?.data?.msg
+          : '关闭MFA失败';
+      Toast.error(message);
+    } finally {
+      setDisablingMFAUserID(null);
+    }
+  };
+
   useEffect(() => {
     loadConfigs();
   }, []);
@@ -754,6 +811,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'weekly-report') {
       loadWeeklyReports();
+    } else if (activeTab === 'mfa-admin') {
+      loadMFAUsers();
     }
   }, [activeTab]);
 
@@ -824,6 +883,72 @@ export default function SettingsPage() {
               </TabPane>
             );
           })}
+
+          <TabPane tab={
+            <span>
+              <IconShield style={{ marginRight: '8px' }} />
+              MFA 管理
+            </span>
+          } itemKey="mfa-admin">
+            <div style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                <div>
+                  <Title heading={4}>MFA 管理</Title>
+                  <Text type="secondary">仅管理员可以关闭用户 MFA，普通用户无法自行关闭。</Text>
+                </div>
+                <Button icon={<IconRefresh />} loading={mfaLoading} onClick={loadMFAUsers}>
+                  刷新列表
+                </Button>
+              </div>
+
+              <Table
+                dataSource={mfaUsers}
+                loading={mfaLoading}
+                pagination={false}
+                empty="暂无已启用 MFA 的用户"
+                columns={[
+                  {
+                    title: '用户',
+                    render: (record: User) => (
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{record.real_name || record.username}</div>
+                        <Text type="secondary" size="small">{record.username}</Text>
+                      </div>
+                    ),
+                  },
+                  {
+                    title: '邮箱',
+                    dataIndex: 'email',
+                  },
+                  {
+                    title: '角色',
+                    render: (record: User) => record.role?.name || '-',
+                  },
+                  {
+                    title: '最近登录',
+                    render: (record: User) => record.last_login_at ? new Date(record.last_login_at).toLocaleString('zh-CN') : '-',
+                  },
+                  {
+                    title: '操作',
+                    render: (record: User) => {
+                      const targetID = record.id || record.ID;
+                      return (
+                        <Button
+                          theme="solid"
+                          type="danger"
+                          size="small"
+                          loading={disablingMFAUserID === targetID}
+                          onClick={() => handleDisableUserMFA(record)}
+                        >
+                          关闭 MFA
+                        </Button>
+                      );
+                    },
+                  },
+                ]}
+              />
+            </div>
+          </TabPane>
 
           {/* 周报管理Tab */}
           <TabPane tab={

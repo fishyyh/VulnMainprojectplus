@@ -9,10 +9,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 	Init "vulnmain/Init"
 	"vulnmain/models"
-	"vulnmain/utils"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -153,34 +151,12 @@ func (s *GoogleAuthService) HandleCallback(code string) (*LoginResponse, error) 
 		return nil, errors.New("用户已被禁用")
 	}
 
-	// 更新登录时间
-	db := Init.GetDB()
-	now := time.Now().Truncate(time.Second)
-	user.LastLoginAt = &now
-	db.Save(user)
-
-	// 生成 JWT
-	jwtToken, err := utils.GenerateToken(user)
-	if err != nil {
-		return nil, errors.New("生成令牌失败")
-	}
-
-	// 提取权限
-	var permissions []string
-	for _, perm := range user.Role.Permissions {
-		permissions = append(permissions, perm.Code)
-	}
-
-	// 记录登录日志
 	authSvc := &AuthService{}
-	authSvc.LogLogin(user, "success", "Google 登录成功")
+	if user.MFAEnabled {
+		return authSvc.buildMFAChallenge(user)
+	}
 
-	return &LoginResponse{
-		Token:       jwtToken,
-		User:        user,
-		Permissions: permissions,
-		ExpiresIn:   int64(utils.GetJWTExpire().Seconds()),
-	}, nil
+	return authSvc.issueLoginResponse(user, "Google 登录成功")
 }
 
 // fetchGoogleUserInfo 从 Google API 获取用户信息

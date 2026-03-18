@@ -88,6 +88,8 @@ export interface LoginResponse {
   token: string;
   refresh_token: string;
   permissions?: string[];
+  mfa_required?: boolean;
+  mfa_token?: string;
   user: {
     id: number;
     ID?: number;
@@ -99,6 +101,7 @@ export interface LoginResponse {
     status: number;
     last_login_at: string;
     role_id: number;
+    mfa_enabled?: boolean;
     role?: {
       id: number;
       name: string;
@@ -115,6 +118,17 @@ export interface SystemInfo {
   company_name: string;
   logo: string;
   version: string;
+}
+
+export interface MFAStatusResponse {
+  enabled: boolean;
+}
+
+export interface MFASetupResponse {
+  secret: string;
+  otpauth_url: string;
+  issuer: string;
+  account: string;
 }
 
 // 系统配置接口
@@ -269,6 +283,26 @@ export const authApi = {
     return response.data;
   },
 
+  verifyMFA: async (data: { mfa_token: string; code: string }): Promise<ApiResponse<LoginResponse>> => {
+    const response = await api.post('/mfa/verify', data);
+    return response.data;
+  },
+
+  getMFAStatus: async (): Promise<ApiResponse<MFAStatusResponse>> => {
+    const response = await api.get('/mfa/status');
+    return response.data;
+  },
+
+  setupMFA: async (): Promise<ApiResponse<MFASetupResponse>> => {
+    const response = await api.post('/mfa/setup');
+    return response.data;
+  },
+
+  enableMFA: async (code: string): Promise<ApiResponse<void>> => {
+    const response = await api.post('/mfa/enable', { code });
+    return response.data;
+  },
+
   // 获取用户信息
   getUserInfo: async (): Promise<ApiResponse<LoginResponse['user']>> => {
     const response = await api.get('/user/info');
@@ -333,6 +367,39 @@ export const authUtils = {
     localStorage.setItem('token', data.token);
     localStorage.setItem('refresh_token', data.refresh_token);
     localStorage.setItem('user', JSON.stringify(data.user));
+    sessionStorage.removeItem('mfa_token');
+    sessionStorage.removeItem('mfa_user');
+    }
+  },
+
+  savePendingMFA: (mfaToken: string, user?: LoginResponse['user']) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('mfa_token', mfaToken);
+      if (user) {
+        sessionStorage.setItem('mfa_user', JSON.stringify(user));
+      }
+    }
+  },
+
+  getPendingMFAToken: (): string => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('mfa_token') || '';
+    }
+    return '';
+  },
+
+  getPendingMFAUser: (): LoginResponse['user'] | null => {
+    if (typeof window !== 'undefined') {
+      const userStr = sessionStorage.getItem('mfa_user');
+      return userStr ? JSON.parse(userStr) : null;
+    }
+    return null;
+  },
+
+  clearPendingMFA: () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('mfa_token');
+      sessionStorage.removeItem('mfa_user');
     }
   },
 
@@ -342,6 +409,8 @@ export const authUtils = {
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('mfa_token');
+    sessionStorage.removeItem('mfa_user');
     }
   },
 
@@ -777,6 +846,7 @@ export interface User {
   department: string;
   status: number;
   last_login_at: string;
+  mfa_enabled?: boolean;
   role_id: number;
   role: Role;
   source?: string; // 账户来源：local/ldap
@@ -833,6 +903,18 @@ export interface UserStatsResponse {
     count: number;
   }>;
 }
+
+export const mfaAdminApi = {
+  listEnabledUsers: async (): Promise<ApiResponse<User[]>> => {
+    const response = await api.get('/system/mfa/users');
+    return response.data;
+  },
+
+  disableUserMFA: async (id: number): Promise<ApiResponse<void>> => {
+    const response = await api.post(`/system/mfa/users/${id}/disable`);
+    return response.data;
+  },
+};
 
 // 资产类型定义
 export interface Asset {

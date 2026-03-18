@@ -63,6 +63,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		// 认证相关接口
 		publicAPI.POST("/login", api.Login)                      // 用户登录接口
 		publicAPI.POST("/refresh", api.RefreshToken)             // JWT令牌刷新接口
+		publicAPI.POST("/mfa/verify", api.VerifyMFA)             // MFA二次验证接口
 		publicAPI.GET("/password/policy", api.GetPasswordPolicy) // 获取密码策略
 
 		// 公开系统信息接口
@@ -84,6 +85,9 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		authAPI.PUT("/user/password", api.ChangePassword)       // 修改当前用户密码
 		authAPI.PUT("/user/profile", api.UpdateProfile)         // 修改当前用户个人信息
 		authAPI.POST("/upload/vuln-image", api.UploadVulnImage) // 上传漏洞相关图片
+		authAPI.GET("/mfa/status", api.GetMFAStatus)            // 获取当前用户MFA状态
+		authAPI.POST("/mfa/setup", api.SetupMFA)                // 生成MFA绑定信息
+		authAPI.POST("/mfa/enable", api.EnableMFA)              // 启用MFA
 
 		// 仪表板模块 - 需要首页查看权限
 		dashboardAPI := authAPI.Group("/dashboard")
@@ -301,14 +305,16 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		systemConfigAPI := systemAPI.Group("")
 		systemConfigAPI.Use(middleware.PermissionMiddleware("system:config"))
 		{
-			systemConfigAPI.GET("/configs", api.GetSystemConfigs)           // 获取系统配置列表
-			systemConfigAPI.GET("/configs/:key", api.GetSystemConfig)       // 获取单个系统配置
-			systemConfigAPI.PUT("/configs/:key", api.UpdateSystemConfig)    // 更新系统配置
-			systemConfigAPI.POST("/configs", api.CreateSystemConfig)        // 创建系统配置
-			systemConfigAPI.DELETE("/configs/:key", api.DeleteSystemConfig) // 删除系统配置
-			systemConfigAPI.POST("/email/test", api.TestEmailConfig)        // 测试邮件配置
-			systemConfigAPI.POST("/ldap/test", api.TestLDAPConfig)          // 测试LDAP连接
-			systemConfigAPI.POST("/ldap/sync", api.SyncLDAPUsers)           // 手动同步LDAP用户
+			systemConfigAPI.GET("/configs", api.GetSystemConfigs)              // 获取系统配置列表
+			systemConfigAPI.GET("/configs/:key", api.GetSystemConfig)          // 获取单个系统配置
+			systemConfigAPI.PUT("/configs/:key", api.UpdateSystemConfig)       // 更新系统配置
+			systemConfigAPI.POST("/configs", api.CreateSystemConfig)           // 创建系统配置
+			systemConfigAPI.DELETE("/configs/:key", api.DeleteSystemConfig)    // 删除系统配置
+			systemConfigAPI.POST("/email/test", api.TestEmailConfig)           // 测试邮件配置
+			systemConfigAPI.POST("/ldap/test", api.TestLDAPConfig)             // 测试LDAP连接
+			systemConfigAPI.POST("/ldap/sync", api.SyncLDAPUsers)              // 手动同步LDAP用户
+			systemConfigAPI.GET("/mfa/users", api.ListMFAUsers)                // 获取已启用MFA的用户
+			systemConfigAPI.POST("/mfa/users/:id/disable", api.DisableUserMFA) // 管理员关闭用户MFA
 		}
 
 		// 系统日志权限组 - 可以查看操作日志

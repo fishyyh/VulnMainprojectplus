@@ -82,6 +82,12 @@ export default function LoginPage() {
       try {
         const json = decodeGoogleAuthPayload(encoded);
         const resp = JSON.parse(json);
+        if (resp.mfa_required && resp.mfa_token) {
+          authUtils.savePendingMFA(resp.mfa_token, resp.user);
+          Toast.success('请输入 Google Authenticator 验证码');
+          window.location.href = '/login/mfa';
+          return;
+        }
         authUtils.saveLoginInfo(resp);
         Toast.success('Google 登录成功！');
         window.location.href = '/';
@@ -319,8 +325,6 @@ export default function LoginPage() {
               lineHeight: 1.7
             }}>
               当前仅开放 Google 单点登录。
-              <br />
-              账号密码登录入口已隐藏并停用。
             </div>
 
             <Button

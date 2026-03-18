@@ -5,7 +5,6 @@ package services
 import (
 	"errors" // 导入错误处理包
 	"fmt"
-	"time"               // 导入时间包，用于处理登录时间
 	Init "vulnmain/Init" // 导入初始化包，获取数据库连接
 	"vulnmain/models"    // 导入模型包，使用用户和日志模型
 	"vulnmain/utils"     // 导入工具包，使用JWT相关功能
@@ -30,6 +29,8 @@ type LoginResponse struct {
 	User         *models.User `json:"user"`          // 用户基本信息
 	Permissions  []string     `json:"permissions"`   // 用户权限代码列表
 	ExpiresIn    int64        `json:"expires_in"`    // 令牌过期时间（秒）
+	MFARequired  bool         `json:"mfa_required,omitempty"`
+	MFAToken     string       `json:"mfa_token,omitempty"`
 }
 
 // LocalLogin方法处理本地用户名密码登录
@@ -79,8 +80,6 @@ func (s *AuthService) LocalLogin(req *LoginRequest) (*LoginResponse, error) {
 			s.LogLogin(&user, "failed", "LDAP密码错误")
 			return nil, errors.New("用户名或密码错误")
 		}
-		// LDAP 验证通过
-		s.LogLogin(&user, "success", "LDAP登录成功")
 		goto ISSUE_TOKEN
 	}
 
@@ -91,33 +90,12 @@ func (s *AuthService) LocalLogin(req *LoginRequest) (*LoginResponse, error) {
 		return nil, errors.New("用户名或密码错误")
 	}
 
-	s.LogLogin(&user, "success", "本地登录成功")
-
 ISSUE_TOKEN:
-	// 更新用户最后登录时间
-	now := time.Now().Truncate(time.Second)
-	user.LastLoginAt = &now
-	db.Save(&user)
-
-	// 为用户生成JWT访问令牌
-	token, err := utils.GenerateToken(&user)
-	if err != nil {
-		return nil, errors.New("生成令牌失败")
+	if user.MFAEnabled {
+		return s.buildMFAChallenge(&user)
 	}
 
-	// 提取用户权限代码列表，用于前端权限控制
-	var permissions []string
-	for _, perm := range user.Role.Permissions {
-		permissions = append(permissions, perm.Code)
-	}
-
-	// 构建并返回登录响应数据
-	return &LoginResponse{
-		Token:       token,                                 // JWT访问令牌
-		User:        &user,                                 // 用户信息
-		Permissions: permissions,                           // 权限列表
-		ExpiresIn:   int64(utils.GetJWTExpire().Seconds()), // 令牌过期时间（秒）
-	}, nil
+	return s.issueLoginResponse(&user, "本地登录成功")
 }
 
 // Login 本地登录入口

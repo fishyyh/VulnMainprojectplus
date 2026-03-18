@@ -13,17 +13,21 @@ import (
 // 包含用户的基本信息、认证信息、角色关联等
 type User struct {
 	gorm.Model
-	Username    string     `gorm:"uniqueIndex;not null" json:"username"`
-	Email       string     `gorm:"uniqueIndex;not null" json:"email"`
-	Password    string     `gorm:"not null" json:"-"`
-	RealName    string     `json:"real_name"`
-	Phone       string     `json:"phone"`
-	Department  string     `json:"department"`
-	Source      string     `gorm:"size:20;default:'local'" json:"source"` // 账户来源：local/ldap
-	Status      int        `gorm:"default:1" json:"status"`              // 1:启用 0:禁用
-	LastLoginAt *time.Time `json:"last_login_at"`
-	RoleID      uint       `gorm:"not null" json:"role_id"`
-	Role        Role       `gorm:"foreignKey:RoleID" json:"role"`
+	Username         string     `gorm:"uniqueIndex;not null" json:"username"`
+	Email            string     `gorm:"uniqueIndex;not null" json:"email"`
+	Password         string     `gorm:"not null" json:"-"`
+	RealName         string     `json:"real_name"`
+	Phone            string     `json:"phone"`
+	Department       string     `json:"department"`
+	Source           string     `gorm:"size:20;default:'local'" json:"source"` // 账户来源：local/ldap
+	Status           int        `gorm:"default:1" json:"status"`               // 1:启用 0:禁用
+	LastLoginAt      *time.Time `json:"last_login_at"`
+	RoleID           uint       `gorm:"not null" json:"role_id"`
+	Role             Role       `gorm:"foreignKey:RoleID" json:"role"`
+	MFAEnabled       bool       `gorm:"default:false" json:"mfa_enabled"`
+	MFASecret        string     `gorm:"type:text" json:"-"`
+	MFAPendingSecret string     `gorm:"type:text" json:"-"`
+	MFALastUsedStep  int64      `gorm:"default:0" json:"-"`
 }
 
 // Role结构体定义角色表的数据模型
