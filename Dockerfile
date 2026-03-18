@@ -6,12 +6,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
-RUN npm config set registry https://registry.npmmirror.com \
-    && npm config set fetch-retries 5 \
-    && npm config set fetch-retry-mintimeout 20000 \
-    && npm config set fetch-retry-maxtimeout 120000 \
-    && npm config set fetch-timeout 600000 \
-    && npm ci --legacy-peer-deps --no-audit --fund=false
+RUN npm install --registry=https://registry.npmmirror.com --legacy-peer-deps
 COPY web/ ./
 # Set API URL to use relative path via nginx proxy
 ENV NEXT_PUBLIC_API_URL=/api

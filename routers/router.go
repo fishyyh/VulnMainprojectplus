@@ -61,8 +61,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 	publicAPI := r.Group("/api")
 	{
 		// 认证相关接口
-		publicAPI.POST("/login", api.Login)          // 用户登录接口
-		publicAPI.POST("/refresh", api.RefreshToken) // JWT令牌刷新接口
+		publicAPI.POST("/login", api.Login)                      // 用户登录接口
+		publicAPI.POST("/refresh", api.RefreshToken)             // JWT令牌刷新接口
 		publicAPI.GET("/password/policy", api.GetPasswordPolicy) // 获取密码策略
 
 		// 公开系统信息接口
@@ -138,11 +138,12 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		vulnViewAPI := vulnAPI.Group("")
 		vulnViewAPI.Use(middleware.PermissionMiddleware("vuln:view"))
 		{
-			vulnViewAPI.GET("", api.GetVulnList)            // 获取漏洞列表
-			vulnViewAPI.GET("/stats", api.GetVulnStats)     // 获取漏洞统计信息
-			vulnViewAPI.GET("/:id", api.GetVuln)            // 获取漏洞详情
+			vulnViewAPI.GET("", api.GetVulnList)                  // 获取漏洞列表
+			vulnViewAPI.GET("/stats", api.GetVulnStats)           // 获取漏洞统计信息
+			vulnViewAPI.GET("/:id", api.GetVuln)                  // 获取漏洞详情
 			vulnViewAPI.GET("/:id/timeline", api.GetVulnTimeline) // 获取漏洞时间线
 			vulnViewAPI.GET("/:id/watchers", api.GetVulnWatchers) // 获取漏洞关注者列表
+			vulnViewAPI.POST("/:id/watchers", api.AddVulnWatcher) // 添加漏洞关注者（有查看权限即可添加）
 			vulnViewAPI.POST("/:id/comments", api.AddVulnComment) // 添加漏洞评论（有查看权限即可评论）
 		}
 
@@ -157,9 +158,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		vulnEditAPI := vulnAPI.Group("")
 		vulnEditAPI.Use(middleware.PermissionMiddleware("vuln:edit"))
 		{
-			vulnEditAPI.PUT("/:id", api.UpdateVuln)               // 更新漏洞信息
-			vulnEditAPI.PUT("/:id/fix", api.FixVuln)              // 标记漏洞为已修复
-			vulnEditAPI.POST("/:id/watchers", api.AddVulnWatcher)              // 添加漏洞关注者
+			vulnEditAPI.PUT("/:id", api.UpdateVuln)                                // 更新漏洞信息
+			vulnEditAPI.PUT("/:id/fix", api.FixVuln)                               // 标记漏洞为已修复
 			vulnEditAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者
 		}
 
@@ -185,11 +185,11 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		assetViewAPI := assetAPI.Group("")
 		assetViewAPI.Use(middleware.PermissionMiddleware("asset:view"))
 		{
-			assetViewAPI.GET("", api.GetAssetList)          // 获取资产列表
-			assetViewAPI.GET("/stats", api.GetAssetStats)   // 获取资产统计信息
-			assetViewAPI.GET("/:id", api.GetAsset)          // 获取资产详情
-			assetViewAPI.GET("/groups", api.GetAssetGroups) // 获取资产组列表
-			assetViewAPI.POST("/export", api.ExportAssets)  // 批量导出资产
+			assetViewAPI.GET("", api.GetAssetList)                          // 获取资产列表
+			assetViewAPI.GET("/stats", api.GetAssetStats)                   // 获取资产统计信息
+			assetViewAPI.GET("/:id", api.GetAsset)                          // 获取资产详情
+			assetViewAPI.GET("/groups", api.GetAssetGroups)                 // 获取资产组列表
+			assetViewAPI.POST("/export", api.ExportAssets)                  // 批量导出资产
 			assetViewAPI.GET("/import/template", api.DownloadAssetTemplate) // 下载导入模板
 		}
 
@@ -267,8 +267,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		teamViewAPI := teamAPI.Group("")
 		teamViewAPI.Use(middleware.PermissionMiddleware("team:view"))
 		{
-			teamViewAPI.GET("", api.GetTeamList)              // 获取团队列表
-			teamViewAPI.GET("/:id", api.GetTeam)              // 获取团队详情
+			teamViewAPI.GET("", api.GetTeamList)                // 获取团队列表
+			teamViewAPI.GET("/:id", api.GetTeam)                // 获取团队详情
 			teamViewAPI.GET("/:id/members", api.GetTeamMembers) // 获取团队成员
 		}
 
@@ -306,8 +306,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 			systemConfigAPI.POST("/configs", api.CreateSystemConfig)        // 创建系统配置
 			systemConfigAPI.DELETE("/configs/:key", api.DeleteSystemConfig) // 删除系统配置
 			systemConfigAPI.POST("/email/test", api.TestEmailConfig)        // 测试邮件配置
-			systemConfigAPI.POST("/ldap/test", api.TestLDAPConfig)         // 测试LDAP连接
-			systemConfigAPI.POST("/ldap/sync", api.SyncLDAPUsers)          // 手动同步LDAP用户
+			systemConfigAPI.POST("/ldap/test", api.TestLDAPConfig)          // 测试LDAP连接
+			systemConfigAPI.POST("/ldap/sync", api.SyncLDAPUsers)           // 手动同步LDAP用户
 		}
 
 		// 系统日志权限组 - 可以查看操作日志
@@ -328,17 +328,17 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		weeklyReportAPI := systemAPI.Group("/weekly-report")
 		weeklyReportAPI.Use(middleware.PermissionMiddleware("system:config")) // 使用系统配置权限
 		{
-			weeklyReportAPI.GET("/data", api.GetWeeklyReportData)        // 获取周报数据
-			weeklyReportAPI.GET("/preview", api.PreviewWeeklyReportPDF)  // 预览周报PDF
-			weeklyReportAPI.GET("/download", api.DownloadWeeklyReportPDF) // 下载周报PDF
-			weeklyReportAPI.POST("/send", api.SendWeeklyReport)          // 手动发送周报
-			weeklyReportAPI.POST("/generate", api.ManualGenerateWeeklyReport) // 手动生成并发送周报
-			weeklyReportAPI.GET("/scheduler/status", api.GetSchedulerStatus) // 获取定时任务状态
+			weeklyReportAPI.GET("/data", api.GetWeeklyReportData)               // 获取周报数据
+			weeklyReportAPI.GET("/preview", api.PreviewWeeklyReportPDF)         // 预览周报PDF
+			weeklyReportAPI.GET("/download", api.DownloadWeeklyReportPDF)       // 下载周报PDF
+			weeklyReportAPI.POST("/send", api.SendWeeklyReport)                 // 手动发送周报
+			weeklyReportAPI.POST("/generate", api.ManualGenerateWeeklyReport)   // 手动生成并发送周报
+			weeklyReportAPI.GET("/scheduler/status", api.GetSchedulerStatus)    // 获取定时任务状态
 			weeklyReportAPI.POST("/scheduler/send", api.ManualSendWeeklyReport) // 手动触发定时发送
 
 			// 周报历史记录管理
-			weeklyReportAPI.GET("/history", api.GetWeeklyReportHistory)     // 获取周报历史记录
-			weeklyReportAPI.GET("/file/:id/preview", api.PreviewWeeklyReportFile) // 预览历史周报文件
+			weeklyReportAPI.GET("/history", api.GetWeeklyReportHistory)             // 获取周报历史记录
+			weeklyReportAPI.GET("/file/:id/preview", api.PreviewWeeklyReportFile)   // 预览历史周报文件
 			weeklyReportAPI.GET("/file/:id/download", api.DownloadWeeklyReportFile) // 下载历史周报文件
 		}
 
@@ -349,7 +349,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		// 数据字典接口 - 所有已认证用户都可以访问
 		authAPI.GET("/dictionaries", api.GetDictionaries) // 获取数据字典
 
-    authAPI.GET("/roles", api.GetRoles)
+		authAPI.GET("/roles", api.GetRoles)
 
 		// 用户项目相关接口 - 所有已认证用户都可以访问
 		authAPI.GET("/user/projects", api.GetUserProjects) // 获取用户的项目列表

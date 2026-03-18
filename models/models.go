@@ -85,6 +85,7 @@ func InitDefaultData() error {
 	// 定义三种基本角色，每种角色有不同的权限范围
 	roles := []Role{
 		{Name: "超级管理员", Code: "super_admin", Description: "系统超级管理员，拥有所有权限"},
+		{Name: "管理员", Code: "admin", Description: "系统管理员，拥有所有权限"},
 		{Name: "安全工程师", Code: "security_engineer", Description: "安全工程师，负责漏洞管理和安全审计"},
 		{Name: "研发工程师", Code: "dev_engineer", Description: "研发工程师，负责漏洞修复"},
 		{Name: "普通用户", Code: "normal_user", Description: "普通用户，最小权限，仅浏览"},
@@ -214,12 +215,28 @@ func InitDefaultData() error {
 		}
 	}
 
+	// 为管理员分配所有权限（与超级管理员一致）
+	var adminRole Role
+	if err := db.Where("code = ?", "admin").First(&adminRole).Error; err == nil {
+		var allPermissions []Permission
+		db.Find(&allPermissions)
+		for _, permission := range allPermissions {
+			var count int64
+			db.Model(&RolePermission{}).Where("role_id = ? AND permission_i+d = ?", adminRole.ID, permission.ID).Count(&count)
+			if count == 0 {
+				db.Create(&RolePermission{
+					RoleID:       adminRole.ID,
+					PermissionID: permission.ID,
+				})
+			}
+		}
+	}
 	// 为安全工程师分配权限
 	// 安全工程师负责漏洞管理和安全审计，可以查看自己名下的项目
 	securityEngineerPermissions := []string{
-		"dashboard:view",                                                                            // 首页查看权限
-		"project:view",                                                                              // 项目查看权限（查看自己名下的项目）
-		"team:view",                                                                                 // 团队查看权限
+		"dashboard:view",                                       // 首页查看权限
+		"project:view",                                         // 项目查看权限（查看自己名下的项目）
+		"team:view", "team:create", "team:edit", "team:delete", // 团队管理权限
 		"user:view",                                                                                 // 用户查看权限（查看研发工程师列表等）
 		"vuln:view", "vuln:create", "vuln:edit", "vuln:assign", "vuln:retest", "vuln:change_status", // 漏洞管理权限
 		"asset:view", "asset:create", "asset:edit", "asset:delete", // 资产管理权限（只能管理自己名下的资产）

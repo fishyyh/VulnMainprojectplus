@@ -1185,19 +1185,17 @@ export default function TeamDetailPage() {
               ) : (
                 <Text type="tertiary" style={{ display: 'block', marginBottom: 8 }}>暂无关注者</Text>
               )}
-              {(isAdmin || isSecurityEngineer || isDevEngineer) && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Input
-                    value={watcherEmail}
-                    onChange={(value) => setWatcherEmail(value)}
-                    placeholder="输入用户邮箱添加关注者"
-                    style={{ flex: 1 }}
-                  />
-                  <Button type="primary" onClick={handleAddWatcher}>
-                    添加
-                  </Button>
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input
+                  value={watcherEmail}
+                  onChange={(value) => setWatcherEmail(value)}
+                  placeholder="输入用户邮箱添加关注者"
+                  style={{ flex: 1 }}
+                />
+                <Button type="primary" onClick={handleAddWatcher}>
+                  添加
+                </Button>
+              </div>
             </div>
 
             {/* Timeline */}
