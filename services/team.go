@@ -268,8 +268,14 @@ func (s *TeamService) GetTeamList(userID uint, roleCode string, page, pageSize i
 
 	// 如果不是超级管理员/管理员，只能看到自己所在的团队
 	if roleCode != "super_admin" && roleCode != "admin" && roleCode != "security_engineer" {
-		query = query.Where("leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?)",
-			userID, userID)
+		// 研发/普通用户可见范围：
+		// 1. 自己是团队负责人
+		// 2. 自己是团队成员
+		// 3. 团队中存在指派给自己的漏洞
+		query = query.Where(
+			"leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?) OR id IN (SELECT DISTINCT team_id FROM vulnerabilities WHERE assignee_id = ? AND team_id IS NOT NULL)",
+			userID, userID, userID,
+		)
 	}
 
 	// 关键词搜索
@@ -314,8 +320,14 @@ func (s *TeamService) GetTeamByID(teamID, userID uint, roleCode string) (*models
 
 	// 如果不是超级管理员/管理员，需要检查权限
 	if roleCode != "super_admin" && roleCode != "admin" && roleCode != "security_engineer" {
-		query = query.Where("id = ? AND (leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?))",
-			teamID, userID, userID)
+		// 研发/普通用户可访问范围：
+		// 1. 自己是团队负责人
+		// 2. 自己是团队成员
+		// 3. 该团队中存在指派给自己的漏洞
+		query = query.Where(
+			"id = ? AND (leader_id = ? OR id IN (SELECT team_id FROM team_members WHERE user_id = ?) OR id IN (SELECT DISTINCT team_id FROM vulnerabilities WHERE assignee_id = ? AND team_id IS NOT NULL))",
+			teamID, userID, userID, userID,
+		)
 	}
 
 	if err := query.First(&team, teamID).Error; err != nil {

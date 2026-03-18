@@ -1134,8 +1134,17 @@ export const vulnApi = {
 
   // 更新漏洞状态
   updateVulnStatus: async (id: number, data: VulnStatusUpdateRequest): Promise<ApiResponse<Vulnerability>> => {
-    const response = await api.put(`/vulns/${id}/status`, data);
-    return response.data;
+    try {
+      const response = await api.put(`/vulns/${id}/status`, data);
+      return response.data;
+    } catch (error) {
+      // 兼容未升级后端或权限未同步场景：回退到旧的更新接口
+      if (axios.isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 403)) {
+        const fallbackResponse = await api.put(`/vulns/${id}`, data);
+        return fallbackResponse.data;
+      }
+      throw error;
+    }
   },
 
   // 删除漏洞

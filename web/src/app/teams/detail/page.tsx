@@ -396,7 +396,7 @@ export default function TeamDetailPage() {
       }
     } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
-      Toast.error(error?.response?.data?.msg || '更新漏洞状态失败');
+      Toast.error(error?.response?.data?.msg || error?.message || '更新漏洞状态失败');
     }
   };
 

@@ -491,7 +491,7 @@ export default function ProjectDetailPage() {
 
     } catch (error: any) {
       console.error('状态变更失败:', error);
-      Toast.error(error?.response?.data?.msg || '状态变更失败');
+      Toast.error(error?.response?.data?.msg || error?.message || '状态变更失败');
     }
   };
 
@@ -689,7 +689,7 @@ export default function ProjectDetailPage() {
       }
     } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
-      Toast.error(error?.response?.data?.msg || '更新漏洞状态失败');
+      Toast.error(error?.response?.data?.msg || error?.message || '更新漏洞状态失败');
     }
   };
 
@@ -725,7 +725,7 @@ export default function ProjectDetailPage() {
       }
     } catch (error: any) {
       console.error('Error resubmitting vulnerability:', error);
-      Toast.error(error?.response?.data?.msg || '重新提交漏洞失败');
+      Toast.error(error?.response?.data?.msg || error?.message || '重新提交漏洞失败');
     }
   };
 

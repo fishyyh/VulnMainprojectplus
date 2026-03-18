@@ -163,12 +163,8 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 			vulnEditAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者
 		}
 
-		// 漏洞状态变更权限组 - 可以变更漏洞状态
-		vulnStatusAPI := vulnAPI.Group("")
-		vulnStatusAPI.Use(middleware.PermissionMiddleware("vuln:change_status"))
-		{
-			vulnStatusAPI.PUT("/:id/status", api.UpdateVulnStatus) // 更新漏洞状态
-		}
+		// 漏洞状态变更接口 - 复用漏洞编辑权限，兼容现网角色权限
+		vulnEditAPI.PUT("/:id/status", api.UpdateVulnStatus) // 更新漏洞状态
 
 		// 漏洞审核权限组 - 可以审核和复测漏洞
 		vulnAuditAPI := vulnAPI.Group("")
