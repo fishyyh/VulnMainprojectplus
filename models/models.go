@@ -192,6 +192,19 @@ func InitDefaultData() error {
 		}
 	}
 
+	// 撤销角色的指定权限（用于权限收敛，避免历史遗留权限持续生效）
+	revokeRolePermissions := func(roleCode string, permissionCodes []string) {
+		var role Role
+		if err := db.Where("code = ?", roleCode).First(&role).Error; err == nil {
+			for _, permCode := range permissionCodes {
+				var permission Permission
+				if err := db.Where("code = ?", permCode).First(&permission).Error; err == nil {
+					db.Where("role_id = ? AND permission_id = ?", role.ID, permission.ID).Delete(&RolePermission{})
+				}
+			}
+		}
+	}
+
 	// 为超级管理员分配所有权限
 	// 超级管理员应该拥有系统中的所有权限
 	var superAdminRole Role
@@ -250,9 +263,10 @@ func InitDefaultData() error {
 		"dashboard:view",                                       // 首页查看权限
 		"project:view",                                         // 项目查看权限（查看自己名下的项目）
 		"team:view", "team:create", "team:edit", "team:delete", // 团队管理权限
-		"vuln:view", "vuln:edit", "vuln:fix", "vuln:change_status", // 漏洞查看、编辑、修复权限（仅能编辑分配给自己的漏洞）
+		"vuln:view", "vuln:fix", // 漏洞查看与修复权限（不允许创建/编辑/状态流转）
 	}
 	assignRolePermissions("dev_engineer", devEngineerPermissions)
+	revokeRolePermissions("dev_engineer", []string{"vuln:create", "vuln:edit", "vuln:change_status"})
 
 	// 为普通用户分配权限
 	normalUserPermissions := []string{

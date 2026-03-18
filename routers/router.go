@@ -138,15 +138,16 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		vulnViewAPI := vulnAPI.Group("")
 		vulnViewAPI.Use(middleware.PermissionMiddleware("vuln:view"))
 		{
-			vulnViewAPI.GET("", api.GetVulnList)                  // 获取漏洞列表
-			vulnViewAPI.GET("/stats", api.GetVulnStats)           // 获取漏洞统计信息
-			vulnViewAPI.GET("/:id", api.GetVuln)                  // 获取漏洞详情
-			vulnViewAPI.PUT("/:id/status", api.UpdateVulnStatus)  // 更新漏洞状态（进入业务层做细粒度校验）
-			vulnViewAPI.GET("/:id/timeline", api.GetVulnTimeline) // 获取漏洞时间线
-			vulnViewAPI.GET("/:id/watchers", api.GetVulnWatchers) // 获取漏洞关注者列表
-			vulnViewAPI.POST("/:id/watchers", api.AddVulnWatcher) // 添加漏洞关注者（有查看权限即可添加）
+			vulnViewAPI.GET("", api.GetVulnList)                                   // 获取漏洞列表
+			vulnViewAPI.GET("/stats", api.GetVulnStats)                            // 获取漏洞统计信息
+			vulnViewAPI.GET("/:id", api.GetVuln)                                   // 获取漏洞详情
+			vulnViewAPI.PUT("/:id/status", api.UpdateVulnStatus)                   // 更新漏洞状态（进入业务层做细粒度校验）
+			vulnViewAPI.PUT("/:id/fix", api.FixVuln)                               // 修复漏洞（服务层校验被指派人或管理角色）
+			vulnViewAPI.GET("/:id/timeline", api.GetVulnTimeline)                  // 获取漏洞时间线
+			vulnViewAPI.GET("/:id/watchers", api.GetVulnWatchers)                  // 获取漏洞关注者列表
+			vulnViewAPI.POST("/:id/watchers", api.AddVulnWatcher)                  // 添加漏洞关注者（有查看权限即可添加）
 			vulnViewAPI.DELETE("/:id/watchers/:watcher_id", api.RemoveVulnWatcher) // 移除漏洞关注者（有查看权限即可移除）
-			vulnViewAPI.POST("/:id/comments", api.AddVulnComment) // 添加漏洞评论（有查看权限即可评论）
+			vulnViewAPI.POST("/:id/comments", api.AddVulnComment)                  // 添加漏洞评论（有查看权限即可评论）
 		}
 
 		// 漏洞创建权限组 - 可以创建新漏洞
@@ -160,8 +161,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		vulnEditAPI := vulnAPI.Group("")
 		vulnEditAPI.Use(middleware.PermissionMiddleware("vuln:edit"))
 		{
-			vulnEditAPI.PUT("/:id", api.UpdateVuln)  // 更新漏洞信息
-			vulnEditAPI.PUT("/:id/fix", api.FixVuln) // 标记漏洞为已修复
+			vulnEditAPI.PUT("/:id", api.UpdateVuln) // 更新漏洞信息
 		}
 
 		// 漏洞审核权限组 - 可以审核和复测漏洞

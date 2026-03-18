@@ -113,7 +113,7 @@ export default function TeamDetailPage() {
   const roleCode = authUtils.getRoleCodeFromUser(currentUser);
   const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
   const isSecurityEngineer = roleCode === 'security_engineer';
-  const isDevEngineer = roleCode === 'dev_engineer';
+  const canManageVuln = isAdmin || isSecurityEngineer;
 
   // ========== Helpers ==========
 
@@ -276,18 +276,31 @@ export default function TeamDetailPage() {
   // ========== Vuln CRUD ==========
 
   const handleCreateVuln = () => {
+    if (!canManageVuln) {
+      Toast.warning('当前角色不允许创建漏洞');
+      return;
+    }
     setEditingVuln(null);
     resetForm();
     setVulnModalVisible(true);
   };
 
   const handleEditVuln = (vuln: Vulnerability) => {
+    if (!canManageVuln) {
+      Toast.warning('当前角色不允许修改漏洞');
+      return;
+    }
     setEditingVuln(vuln);
     fillFormFromVuln(vuln);
     setVulnModalVisible(true);
   };
 
   const handleSaveVuln = async () => {
+    if (!canManageVuln) {
+      Toast.warning('当前角色不允许创建或修改漏洞');
+      return;
+    }
+
     // Validate required fields
     if (!formTitle.trim()) { Toast.error('请输入漏洞标题'); return; }
     if (!formVulnUrl.trim()) { Toast.error('请输入漏洞地址'); return; }
@@ -401,6 +414,29 @@ export default function TeamDetailPage() {
     }
   };
 
+  const handleFixVuln = async (vulnId: number) => {
+    try {
+      await vulnApi.fixVuln(vulnId);
+      Toast.success('修复操作已提交');
+      loadVulns();
+
+      if (viewingVuln && viewingVuln.id === vulnId) {
+        try {
+          const response = await vulnApi.getVuln(vulnId);
+          if (response.code === 200 && response.data) {
+            setViewingVuln(response.data);
+          }
+          await refreshTimeline(vulnId);
+        } catch (refreshError) {
+          console.error('刷新漏洞详情失败:', refreshError);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error fixing vulnerability:', error);
+      Toast.error(error?.response?.data?.msg || error?.message || '修复漏洞失败');
+    }
+  };
+
   const handleAddComment = async () => {
     if (!viewingVuln || !commentText.trim()) {
       Toast.warning('请输入评论内容');
@@ -463,19 +499,18 @@ export default function TeamDetailPage() {
     const buttons: React.ReactNode[] = [];
     const userId = currentUser?.id || currentUser?.ID;
     const isAssignee = vuln.assignee_id === userId;
+    const canOnlyFix = isAssignee && !isAdmin && !isSecurityEngineer;
 
     switch (vuln.status) {
       case 'pending':
-        // 开发可以开始修复
-        if (isAdmin || isAssignee) {
+        if (isAdmin || isSecurityEngineer) {
           buttons.push(
             <Button key="fixing" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixing', { fix_started_at: new Date().toISOString() })}>
               开始修复
             </Button>
           );
         }
-        // 开发可以驳回
-        if (isAdmin || isAssignee) {
+        if (isAdmin || isSecurityEngineer) {
           buttons.push(
             <Button key="reject" size="small" type="danger" onClick={() => {
               Modal.confirm({
@@ -501,9 +536,16 @@ export default function TeamDetailPage() {
             </Button>
           );
         }
+        if (canOnlyFix) {
+          buttons.push(
+            <Button key="fix" size="small" type="primary" onClick={() => handleFixVuln(vuln.id)}>
+              修复漏洞
+            </Button>
+          );
+        }
         break;
       case 'unfixed':
-        if (isAdmin || isAssignee) {
+        if (isAdmin || isSecurityEngineer) {
           buttons.push(
             <Button key="fixing" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixing', { fix_started_at: new Date().toISOString() })}>
               开始修复
@@ -523,10 +565,16 @@ export default function TeamDetailPage() {
             </Button>
           );
         }
+        if (canOnlyFix) {
+          buttons.push(
+            <Button key="fix" size="small" type="primary" onClick={() => handleFixVuln(vuln.id)}>
+              修复漏洞
+            </Button>
+          );
+        }
         break;
       case 'fixing':
-        // 开发提交已修复
-        if (isAdmin || isAssignee) {
+        if (isAdmin || isSecurityEngineer) {
           buttons.push(
             <Button key="fixed" size="small" type="primary" onClick={() => handleUpdateVulnStatus(vuln.id, 'fixed', { fixed_at: new Date().toISOString(), fixed_by: userId })}>
               提交已修复
@@ -541,6 +589,13 @@ export default function TeamDetailPage() {
               });
             }}>
               驳回
+            </Button>
+          );
+        }
+        if (canOnlyFix) {
+          buttons.push(
+            <Button key="fix" size="small" type="primary" onClick={() => handleFixVuln(vuln.id)}>
+              修复漏洞
             </Button>
           );
         }
@@ -587,9 +642,7 @@ export default function TeamDetailPage() {
   const canEditVuln = (vuln: Vulnerability) => {
     if (isAdmin) return true;
     if (vuln.status === 'completed' || vuln.status === 'closed') return false;
-    const userId = currentUser?.id || currentUser?.ID;
     if (isSecurityEngineer) return true;
-    if (isDevEngineer && vuln.assignee_id === userId) return true;
     return false;
   };
 
@@ -928,9 +981,11 @@ export default function TeamDetailPage() {
                 />
                 <Button icon={<IconRefresh />} onClick={() => loadVulns()}>刷新</Button>
               </Space>
-              <Button type="primary" theme="solid" icon={<IconPlus />} onClick={handleCreateVuln}>
-                创建漏洞
-              </Button>
+              {canManageVuln && (
+                <Button type="primary" theme="solid" icon={<IconPlus />} onClick={handleCreateVuln}>
+                  创建漏洞
+                </Button>
+              )}
             </div>
 
             {/* Vuln Table */}

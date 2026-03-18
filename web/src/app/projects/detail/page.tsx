@@ -148,9 +148,6 @@ export default function ProjectDetailPage() {
   const isSecurityEngineer = roleCode === 'security_engineer';
   const isDevEngineer = roleCode === 'dev_engineer';
 
-  // 检查是否是项目负责人
-  const isProjectOwner = project && currentUser && (project.owner_id === (currentUser.id || currentUser.ID));
-
   // 项目过期检查
   const isProjectExpired = (project: Project) => {
     if (!project.end_date) return false;
@@ -381,6 +378,11 @@ export default function ProjectDetailPage() {
 
   // 漏洞相关操作
   const handleCreateVuln = async () => {
+    if (!(isAdmin || isSecurityEngineer)) {
+      Toast.warning('当前角色不允许创建漏洞');
+      return;
+    }
+
     setEditingVuln(null);
     setVulnDescription(''); // 清空markdown内容
     if (vulnFormRef) {
@@ -402,13 +404,11 @@ export default function ProjectDetailPage() {
   };
 
   const handleEditVuln = async (vuln: Vulnerability) => {
-    // 研发工程师使用状态变更弹窗
-    if (isDevEngineer) {
-      handleChangeVulnStatus(vuln);
+    if (!(isAdmin || isSecurityEngineer)) {
+      Toast.warning('当前角色不允许修改漏洞');
       return;
     }
 
-    // 其他角色使用原有的编辑功能
     // 确保资产数据已加载，如果还没有加载就先加载
     const availableAssets = getAvailableAssets();
     if (availableAssets.length === 0) {
@@ -525,6 +525,11 @@ export default function ProjectDetailPage() {
   };
 
   const handleSaveVuln = async (values: any) => {
+    if (!(isAdmin || isSecurityEngineer)) {
+      Toast.warning('当前角色不允许创建或修改漏洞');
+      return;
+    }
+
     try {
 
       // 验证markdown内容
@@ -691,6 +696,29 @@ export default function ProjectDetailPage() {
     } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
       Toast.error(error?.response?.data?.msg || error?.message || '更新漏洞状态失败');
+    }
+  };
+
+  const handleFixVuln = async (vulnId: number) => {
+    try {
+      await vulnApi.fixVuln(vulnId);
+      Toast.success('修复操作已提交');
+      loadVulnerabilities();
+
+      if (viewingVuln && viewingVuln.id === vulnId) {
+        try {
+          const response = await vulnApi.getVuln(vulnId);
+          if (response.code === 200 && response.data) {
+            setViewingVuln(response.data);
+          }
+          await refreshTimeline(vulnId);
+        } catch (refreshError) {
+          console.error('刷新漏洞详情失败:', refreshError);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error fixing vulnerability:', error);
+      Toast.error(error?.response?.data?.msg || error?.message || '修复漏洞失败');
     }
   };
 
@@ -968,7 +996,6 @@ export default function ProjectDetailPage() {
 
     const userId = currentUser?.id || currentUser?.ID;
     if (isSecurityEngineer && vuln.reporter_id === userId && vuln.status === 'unfixed') return true;
-    if (isDevEngineer && vuln.assignee_id === userId) return true;
     return false;
   };
 
@@ -980,9 +1007,6 @@ export default function ProjectDetailPage() {
     // 安全工程师可以复测自己提交的漏洞
     const userId = currentUser?.id || currentUser?.ID;
     if (isSecurityEngineer && vuln.reporter_id === userId) return true;
-
-    // 项目负责人可以复测项目内的漏洞（包括超级管理员提交的）
-    if (isProjectOwner) return true;
 
     return false;
   };
@@ -1252,76 +1276,22 @@ export default function ProjectDetailPage() {
             </Button>
           )}
 
-          {/* 被指派人 - 分配给自己的漏洞操作 */}
-          {record.assignee_id === (currentUser?.ID || currentUser?.id) && (
-            <>
-              {/* 未修复状态：可以开始修复或直接标记已修复 */}
-              {record.status === 'unfixed' && (
-                <>
-                  <Button
-                    theme="borderless"
-                    type="primary"
-                    size="small"
-                    onClick={() => handleUpdateVulnStatus(record.id, 'fixing', {
-                      fix_started_at: new Date().toISOString(),
-                      fixer_id: currentUser?.ID || currentUser?.id
-                    })}
-                  >
-                    开始修复
-                  </Button>
-                  <Button
-                    theme="borderless"
-                    type="secondary"
-                    size="small"
-                    onClick={() => handleUpdateVulnStatus(record.id, 'fixed', {
-                      fixed_at: new Date().toISOString(),
-                      fixer_id: currentUser?.ID || currentUser?.id
-                    })}
-                  >
-                    标记已修复
-                  </Button>
-                </>
-              )}
+          {/* 被指派人（非管理员/安全人员）仅允许修复漏洞 */}
+          {record.assignee_id === (currentUser?.ID || currentUser?.id) &&
+            !isAdmin &&
+            !isSecurityEngineer &&
+            ['pending', 'confirmed', 'unfixed', 'fixing'].includes(record.status) && (
+              <Button
+                theme="borderless"
+                type="primary"
+                size="small"
+                onClick={() => handleFixVuln(record.id)}
+              >
+                修复漏洞
+              </Button>
+            )}
 
-              {/* 修复中状态：可以标记已修复或忽略 */}
-              {record.status === 'fixing' && (
-                <>
-                  <Button
-                    theme="borderless"
-                    type="secondary"
-                    size="small"
-                    onClick={() => handleUpdateVulnStatus(record.id, 'fixed', {
-                      fixed_at: new Date().toISOString(),
-                      fixer_id: currentUser?.ID || currentUser?.id
-                    })}
-                  >
-                    标记已修复
-                  </Button>
-                  <Button
-                    theme="borderless"
-                    type="tertiary"
-                    size="small"
-                    onClick={() => {
-                      Modal.confirm({
-                        title: '忽略漏洞',
-                        content: '请输入忽略原因：',
-                        onOk: (reason) => {
-                          const reasonText = prompt('请输入忽略原因：');
-                          if (reasonText) {
-                            handleUpdateVulnStatus(record.id, 'ignored', { ignore_reason: reasonText });
-                          }
-                        }
-                      });
-                    }}
-                  >
-                    忽略
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-
-          {/* 复测完成操作 - 安全工程师和项目负责人 */}
+          {/* 复测完成操作 - 仅管理员和安全工程师 */}
           {canRetestVuln(record) && record.status === 'retesting' && (
             <>
               <Button
