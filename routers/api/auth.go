@@ -281,26 +281,8 @@ func UploadVulnImage(c *gin.Context) {
 		return
 	}
 
-	// 构造基础URL - 固定指向后端服务器
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-
-	// 固定使用后端地址，避免前端端口影响
-	host := c.Request.Host
-	if strings.Contains(host, ":3000") || strings.Contains(host, "localhost") {
-		// 如果是从前端访问，固定使用后端地址
-		host = "127.0.0.1"
-		if scheme == "https" {
-			host = "127.0.0.1:443" // 如果需要HTTPS
-		}
-	}
-
-	baseURL := fmt.Sprintf("%s://%s", scheme, host)
-
 	// 调用用户服务上传图片
-	imageURL, err := userService.UploadVulnImage(userID.(uint), file, baseURL)
+	imageURL, err := userService.UploadVulnImage(userID.(uint), file)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
@@ -316,6 +298,39 @@ func UploadVulnImage(c *gin.Context) {
 			"image_url": imageURL,
 		},
 	})
+}
+
+func GetVulnImage(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401,
+			"msg":  "用户未认证",
+		})
+		return
+	}
+
+	roleCode, exists := c.Get("role_code")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code": 401,
+			"msg":  "用户角色信息缺失",
+		})
+		return
+	}
+
+	filename := c.Param("filename")
+	contentType, fileData, err := userService.GetVulnImage(userID.(uint), roleCode.(string), filename)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code": 404,
+			"msg":  err.Error(),
+		})
+		return
+	}
+
+	c.Header("Cache-Control", "private, no-store")
+	c.Data(http.StatusOK, contentType, fileData)
 }
 
 // isValidImageType 检查是否为有效的图片类型
@@ -387,13 +402,20 @@ func getAllowedFileTypes() ([]string, error) {
 	systemService := &services.SystemService{}
 	config, err := systemService.GetSystemConfig("upload.allowed_types")
 	if err != nil {
-		return []string{"jpg", "jpeg", "png", "gif"}, err // 默认图片类型
+		return []string{"jpg", "jpeg", "png", "gif", "webp"}, err // 默认图片类型
 	}
 
 	types := strings.Split(config.Value, ",")
 	var cleanTypes []string
 	for _, t := range types {
-		cleanTypes = append(cleanTypes, strings.TrimSpace(strings.ToLower(t)))
+		cleanType := strings.TrimSpace(strings.ToLower(t))
+		if isImageExtension(cleanType) {
+			cleanTypes = append(cleanTypes, cleanType)
+		}
+	}
+
+	if len(cleanTypes) == 0 {
+		return []string{"jpg", "jpeg", "png", "gif", "webp"}, nil
 	}
 
 	return cleanTypes, nil
@@ -427,7 +449,7 @@ func isValidImageTypeByConfig(filename, contentType string) bool {
 
 // isImageExtension 检查扩展名是否为图片类型
 func isImageExtension(ext string) bool {
-	imageExts := []string{"jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"}
+	imageExts := []string{"jpg", "jpeg", "png", "gif", "webp"}
 	for _, imageExt := range imageExts {
 		if ext == imageExt {
 			return true

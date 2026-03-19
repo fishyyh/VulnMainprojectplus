@@ -22,11 +22,12 @@ func GoogleAuthRedirect(c *gin.Context) {
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
 	// 将 state 存到 cookie
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("oauth_state", state, 600, "/", "", false, true)
 
 	authURL, err := googleAuthService.GetAuthURL(state)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, "/login/?error="+url.QueryEscape(err.Error()))
+		c.Redirect(http.StatusTemporaryRedirect, "/login#error="+url.QueryEscape(err.Error()))
 		return
 	}
 
@@ -40,10 +41,11 @@ func GoogleAuthCallback(c *gin.Context) {
 	state := c.Query("state")
 	cookieState, err := c.Cookie("oauth_state")
 	if err != nil || state != cookieState {
-		c.Redirect(http.StatusTemporaryRedirect, "/login/?error="+url.QueryEscape("无效的请求状态"))
+		c.Redirect(http.StatusTemporaryRedirect, "/login#error="+url.QueryEscape("无效的请求状态"))
 		return
 	}
 	// 清除 state cookie
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
 
 	code := c.Query("code")
@@ -52,13 +54,13 @@ func GoogleAuthCallback(c *gin.Context) {
 		if errorMsg == "" {
 			errorMsg = "授权失败"
 		}
-		c.Redirect(http.StatusTemporaryRedirect, "/login/?error="+url.QueryEscape(errorMsg))
+		c.Redirect(http.StatusTemporaryRedirect, "/login#error="+url.QueryEscape(errorMsg))
 		return
 	}
 
 	resp, err := googleAuthService.HandleCallback(code)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, "/login/?error="+url.QueryEscape(err.Error()))
+		c.Redirect(http.StatusTemporaryRedirect, "/login#error="+url.QueryEscape(err.Error()))
 		return
 	}
 
@@ -93,5 +95,5 @@ func GoogleAuthCallback(c *gin.Context) {
 	}
 	respJSON, _ := json.Marshal(frontendResp)
 	encodedResp := base64.RawURLEncoding.EncodeToString(respJSON)
-	c.Redirect(http.StatusTemporaryRedirect, "/login/?google_auth="+encodedResp)
+	c.Redirect(http.StatusTemporaryRedirect, "/login#google_auth="+encodedResp)
 }

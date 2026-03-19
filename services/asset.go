@@ -91,8 +91,6 @@ type AssetListResponse struct {
 	TotalPages  int            `json:"total_pages"`  // 总页数
 }
 
-
-
 // AssetExportRequest结构体定义批量导出资产的请求参数
 type AssetExportRequest struct {
 	AssetIDs  []uint `json:"asset_ids"`  // 要导出的资产ID列表
@@ -106,10 +104,10 @@ type AssetImportRequest struct {
 
 // AssetImportResult结构体定义批量导入的结果
 type AssetImportResult struct {
-	SuccessCount int      `json:"success_count"` // 成功导入的资产数量
-	FailureCount int      `json:"failure_count"` // 导入失败的资产数量
-	Errors       []string `json:"errors"`        // 错误信息列表
-	Assets       []models.Asset `json:"assets"`  // 成功导入的资产列表
+	SuccessCount int            `json:"success_count"` // 成功导入的资产数量
+	FailureCount int            `json:"failure_count"` // 导入失败的资产数量
+	Errors       []string       `json:"errors"`        // 错误信息列表
+	Assets       []models.Asset `json:"assets"`        // 成功导入的资产列表
 }
 
 // CreateAsset方法创建新的资产记录
@@ -578,7 +576,19 @@ func (s *AssetService) addAuditLog(assetID uint, action, before, after string, u
 	db.Create(&log)
 }
 
+func sanitizeExcelCellValue(value interface{}) interface{} {
+	str, ok := value.(string)
+	if !ok || str == "" {
+		return value
+	}
 
+	switch str[0] {
+	case '=', '+', '-', '@':
+		return "'" + str
+	default:
+		return value
+	}
+}
 
 // ExportAssetsToExcel 批量导出资产到Excel文件
 func (s *AssetService) ExportAssetsToExcel(assetIDs []uint, projectID uint, userID uint, userRole string) ([]byte, error) {
@@ -738,7 +748,7 @@ func (s *AssetService) ExportAssetsToExcel(assetIDs []uint, projectID uint, user
 
 		for j, value := range data {
 			cell := fmt.Sprintf("%c%d", 'A'+j, row)
-			f.SetCellValue(sheetName, cell, value)
+			f.SetCellValue(sheetName, cell, sanitizeExcelCellValue(value))
 		}
 	}
 

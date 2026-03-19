@@ -59,7 +59,7 @@ func InitDB() *gorm.DB {
 	// 检查数据库连接是否成功
 	if err != nil {
 		// 连接失败时记录致命错误并终止程序
-		g.Log().Fatalf("数据库连接错误", err)
+		g.Log().Fatalf("数据库连接错误: %v", err)
 	} else {
 		// 连接成功时记录信息日志
 		g.Log().Info("数据连接成功")

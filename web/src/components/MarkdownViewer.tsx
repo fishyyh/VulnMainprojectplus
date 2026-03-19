@@ -2,15 +2,23 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { ExtraProps } from 'react-markdown';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { IconClose, IconChevronLeft, IconChevronRight } from '@douyinfe/semi-icons';
-import { resolveImageUrl } from '@/lib/api';
+import { fetchProtectedImageObjectUrl, isProtectedVulnImageUrl, resolveImageUrl } from '@/lib/api';
 
 interface MarkdownViewerProps {
   content: string;
   className?: string;
   style?: React.CSSProperties;
 }
+
+type MarkdownImageProps = JSX.IntrinsicElements['img'] & ExtraProps;
+type MarkdownCodeProps = JSX.IntrinsicElements['code'] & ExtraProps;
+type MarkdownLinkProps = JSX.IntrinsicElements['a'] & ExtraProps;
+type MarkdownTableProps = JSX.IntrinsicElements['table'] & ExtraProps;
+type MarkdownTableHeaderProps = JSX.IntrinsicElements['th'] & ExtraProps;
+type MarkdownTableCellProps = JSX.IntrinsicElements['td'] & ExtraProps;
 
 export default function MarkdownViewer({ content, className, style }: MarkdownViewerProps) {
   const [imageModalVisible, setImageModalVisible] = useState(false);
@@ -26,7 +34,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
     while ((match = imgRegex.exec(content)) !== null) {
       const alt = match[1] || '';
       const src = match[2];
-      images.push({ src: resolveImageUrl(src), alt });
+      images.push({ src, alt });
     }
 
     return images;
@@ -34,10 +42,9 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
 
   // 处理图片点击
   const handleImageClick = (src: string, alt: string) => {
-    const resolvedSrc = resolveImageUrl(src);
-    const imageIndex = imageUrls.findIndex(img => img.src === resolvedSrc);
+    const imageIndex = imageUrls.findIndex(img => img.src === src);
     setCurrentImageIndex(imageIndex >= 0 ? imageIndex : 0);
-    setSelectedImage({ src: resolvedSrc, alt });
+    setSelectedImage({ src, alt });
     setImageModalVisible(true);
   };
 
@@ -67,11 +74,19 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
       switch (event.key) {
         case 'ArrowLeft':
           event.preventDefault();
-          handlePrevImage();
+          if (imageUrls.length > 1) {
+            const prevIndex = currentImageIndex > 0 ? currentImageIndex - 1 : imageUrls.length - 1;
+            setCurrentImageIndex(prevIndex);
+            setSelectedImage(imageUrls[prevIndex]);
+          }
           break;
         case 'ArrowRight':
           event.preventDefault();
-          handleNextImage();
+          if (imageUrls.length > 1) {
+            const nextIndex = currentImageIndex < imageUrls.length - 1 ? currentImageIndex + 1 : 0;
+            setCurrentImageIndex(nextIndex);
+            setSelectedImage(imageUrls[nextIndex]);
+          }
           break;
         case 'Escape':
           event.preventDefault();
@@ -84,15 +99,114 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
-  }, [imageModalVisible, currentImageIndex, imageUrls.length]);
+  }, [imageModalVisible, currentImageIndex, imageUrls]);
 
   // 自定义图片渲染组件
-  const ImageRenderer = ({ src, alt, ...props }: any) => {
-    const resolvedSrc = resolveImageUrl(src || '');
-    
+  const ProtectedImage = ({
+    src,
+    alt,
+    style: imageStyle,
+    onClick,
+    ...props
+  }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+    const [displaySrc, setDisplaySrc] = useState('');
+    const [loadFailed, setLoadFailed] = useState(false);
+
+    useEffect(() => {
+      let revokedUrl = '';
+      let active = true;
+
+      const loadImage = async () => {
+        if (!src) {
+          setDisplaySrc('');
+          setLoadFailed(false);
+          return;
+        }
+
+        if (!isProtectedVulnImageUrl(src)) {
+          setDisplaySrc(resolveImageUrl(src));
+          setLoadFailed(false);
+          return;
+        }
+
+        try {
+          const objectUrl = await fetchProtectedImageObjectUrl(src);
+          if (!active) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+
+          revokedUrl = objectUrl;
+          setDisplaySrc(objectUrl);
+          setLoadFailed(false);
+        } catch (error) {
+          console.error('加载受保护图片失败:', error);
+          if (active) {
+            setDisplaySrc('');
+            setLoadFailed(true);
+          }
+        }
+      };
+
+      loadImage();
+
+      return () => {
+        active = false;
+        if (revokedUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(revokedUrl);
+        }
+      };
+    }, [src]);
+
+    if (loadFailed) {
+      return (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: '6px',
+            background: '#fff5f5',
+            color: '#c53030',
+            fontSize: '13px',
+            ...imageStyle,
+          }}
+        >
+          图片加载失败或无权限访问
+        </div>
+      );
+    }
+
+    if (!displaySrc) {
+      return (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: '6px',
+            background: '#f6f8fa',
+            color: '#64748b',
+            fontSize: '13px',
+            ...imageStyle,
+          }}
+        >
+          图片加载中...
+        </div>
+      );
+    }
+
     return (
       <img
-        src={resolvedSrc}
+        src={displaySrc}
+        alt={alt}
+        style={imageStyle}
+        onClick={onClick}
+        {...props}
+      />
+    );
+  };
+
+  const ImageRenderer = ({ src, alt, ...props }: MarkdownImageProps) => {
+    return (
+      <ProtectedImage
+        src={src || ''}
         alt={alt}
         {...props}
         style={{
@@ -116,7 +230,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
   };
 
   // 自定义代码块渲染
-  const CodeRenderer = ({ children, className, ...props }: any) => {
+  const CodeRenderer = ({ children, className, ...props }: MarkdownCodeProps) => {
     const isInline = !className;
     
     if (isInline) {
@@ -153,7 +267,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
   };
 
   // 自定义链接渲染
-  const LinkRenderer = ({ href, children, ...props }: any) => {
+  const LinkRenderer = ({ href, children, ...props }: MarkdownLinkProps) => {
     return (
       <a
         href={href}
@@ -177,7 +291,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
   };
 
   // 自定义表格渲染
-  const TableRenderer = ({ children, ...props }: any) => {
+  const TableRenderer = ({ children, ...props }: MarkdownTableProps) => {
     return (
       <div style={{ overflow: 'auto', margin: '16px 0' }}>
         <table
@@ -194,7 +308,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
     );
   };
 
-  const TableHeaderRenderer = ({ children, ...props }: any) => {
+  const TableHeaderRenderer = ({ children, ...props }: MarkdownTableHeaderProps) => {
     return (
       <th
         style={{
@@ -211,7 +325,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
     );
   };
 
-  const TableCellRenderer = ({ children, ...props }: any) => {
+  const TableCellRenderer = ({ children, ...props }: MarkdownTableCellProps) => {
     return (
       <td
         style={{
@@ -392,7 +506,7 @@ export default function MarkdownViewer({ content, className, style }: MarkdownVi
               padding: '20px',
             }}
           >
-            <img
+            <ProtectedImage
               src={selectedImage.src}
               alt={selectedImage.alt}
               style={{

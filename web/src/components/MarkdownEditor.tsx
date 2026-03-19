@@ -40,7 +40,7 @@ export default function MarkdownEditor({
             const types = allowedTypesConfig.value.split(',').map(type => type.trim().toLowerCase());
             // 只保留图片类型
             const imageTypes = types.filter(type =>
-              ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(type)
+              ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(type)
             );
             if (imageTypes.length > 0) {
               setAllowedTypes(imageTypes);
@@ -77,9 +77,16 @@ export default function MarkdownEditor({
         Toast.error(response.msg || '图片上传失败');
         throw new Error(response.msg || '图片上传失败');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as { response?: { data?: { msg?: string } } }).response?.data?.msg === 'string'
+          ? (error as { response?: { data?: { msg?: string } } }).response?.data?.msg
+          : '图片上传失败';
       console.error('图片上传失败:', error);
-      Toast.error(error?.response?.data?.msg || '图片上传失败');
+      Toast.error(message);
       throw error;
     } finally {
       setUploading(false);

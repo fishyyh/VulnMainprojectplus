@@ -68,12 +68,17 @@ export default function LoginPage() {
     };
 
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+    const params = new URLSearchParams(hash || window.location.search);
+
+    const clearLoginPayload = () => {
+      window.history.replaceState({}, '', '/login');
+    };
 
     const error = params.get('error');
     if (error) {
       Toast.error('Google 登录失败: ' + decodeURIComponent(error));
-      window.history.replaceState({}, '', '/login/');
+      clearLoginPayload();
       return;
     }
 
@@ -82,6 +87,7 @@ export default function LoginPage() {
       try {
         const json = decodeGoogleAuthPayload(encoded);
         const resp = JSON.parse(json);
+        clearLoginPayload();
         if (resp.mfa_required && resp.mfa_token) {
           authUtils.savePendingMFA(resp.mfa_token, resp.user);
           Toast.success('请输入 Google Authenticator 验证码');
@@ -93,7 +99,7 @@ export default function LoginPage() {
         window.location.href = '/';
       } catch {
         Toast.error('Google 登录数据解析失败');
-        window.history.replaceState({}, '', '/login/');
+        clearLoginPayload();
       }
     }
   }, []);

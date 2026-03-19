@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Button, Input, Toast, Typography } from '@douyinfe/semi-ui';
 import { authApi, authUtils, type MFASetupResponse } from '@/lib/api';
+import Image from 'next/image';
+import QRCode from 'qrcode';
 
 const { Title, Text } = Typography;
 
@@ -15,6 +17,7 @@ interface UserInfo {
 
 export default function MFASetupPage() {
   const [setupInfo, setSetupInfo] = useState<MFASetupResponse | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -38,6 +41,44 @@ export default function MFASetupPage() {
 
     loadSetupInfo();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const renderQRCode = async () => {
+      if (!setupInfo?.otpauth_url) {
+        setQrCodeUrl('');
+        return;
+      }
+
+      try {
+        const url = await QRCode.toDataURL(setupInfo.otpauth_url, {
+          width: 240,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: {
+            dark: '#0f172a',
+            light: '#FFFFFFFF',
+          },
+        });
+
+        if (active) {
+          setQrCodeUrl(url);
+        }
+      } catch (error) {
+        console.error('生成MFA二维码失败:', error);
+        if (active) {
+          setQrCodeUrl('');
+        }
+      }
+    };
+
+    renderQRCode();
+
+    return () => {
+      active = false;
+    };
+  }, [setupInfo]);
 
   const loadSetupInfo = async () => {
     setLoading(true);
@@ -98,6 +139,21 @@ export default function MFASetupPage() {
     window.location.href = '/login';
   };
 
+  const handleCopy = async (label: string, value?: string) => {
+    if (!value) {
+      Toast.error(`没有可复制的${label}`);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      Toast.success(`${label}已复制`);
+    } catch (error) {
+      console.error(`复制${label}失败:`, error);
+      Toast.error(`复制${label}失败`);
+    }
+  };
+
   return (
     <div
       style={{
@@ -128,30 +184,102 @@ export default function MFASetupPage() {
         </Text>
 
         {setupInfo && (
-          <div
-            style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(16, 185, 129, 0.06))',
-              border: '1px solid rgba(59, 130, 246, 0.12)',
-              borderRadius: '16px',
-              padding: '18px 18px 6px',
-              marginBottom: '18px',
-            }}
-          >
-            <div style={{ marginBottom: '10px' }}>
-              <strong>账户：</strong>{setupInfo.account}
+          <div style={{ marginBottom: '18px', display: 'grid', gap: '16px' }}>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(16, 185, 129, 0.06))',
+                border: '1px solid rgba(59, 130, 246, 0.12)',
+                borderRadius: '16px',
+                padding: '18px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>方式一：扫码绑定</div>
+                  <Text style={{ color: '#64748b', lineHeight: 1.7 }}>
+                    打开 Google Authenticator，选择“扫描二维码”，扫描下方二维码即可自动导入。
+                  </Text>
+                </div>
+                <Button theme="borderless" type="tertiary" onClick={() => handleCopy('otpauth URL', setupInfo.otpauth_url)}>
+                  复制链接
+                </Button>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  minHeight: '272px',
+                  borderRadius: '16px',
+                  background: '#ffffff',
+                  border: '1px dashed rgba(15, 23, 42, 0.12)',
+                }}
+              >
+                {qrCodeUrl ? (
+                  <Image
+                    src={qrCodeUrl}
+                    alt="MFA QR Code"
+                    width={240}
+                    height={240}
+                    unoptimized
+                    style={{ display: 'block' }}
+                  />
+                ) : (
+                  <Text style={{ color: '#64748b' }}>二维码生成中...</Text>
+                )}
+              </div>
             </div>
-            <div style={{ marginBottom: '10px' }}>
-              <strong>发行方：</strong>{setupInfo.issuer}
+
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid rgba(15, 23, 42, 0.08)',
+                borderRadius: '16px',
+                padding: '18px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>方式二：手动输入密钥</div>
+                  <Text style={{ color: '#64748b', lineHeight: 1.7 }}>
+                    如果当前设备无法扫码，可以在 Google Authenticator 中选择“输入设置密钥”，按下面信息手动录入。
+                  </Text>
+                </div>
+                <Button theme="borderless" type="tertiary" onClick={() => handleCopy('MFA密钥', setupInfo.secret)}>
+                  复制密钥
+                </Button>
+              </div>
+
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div>
+                  <Text type="secondary">账户</Text>
+                  <div style={{ marginTop: '6px', color: '#0f172a', fontWeight: 600 }}>{setupInfo.account}</div>
+                </div>
+                <div>
+                  <Text type="secondary">发行方</Text>
+                  <div style={{ marginTop: '6px', color: '#0f172a', fontWeight: 600 }}>{setupInfo.issuer}</div>
+                </div>
+                <div>
+                  <Text type="secondary">密钥</Text>
+                  <div
+                    style={{
+                      marginTop: '6px',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      background: '#ffffff',
+                      border: '1px solid rgba(15, 23, 42, 0.08)',
+                      wordBreak: 'break-all',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      letterSpacing: '1px',
+                      color: '#0f172a',
+                    }}
+                  >
+                    {setupInfo.secret}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style={{ marginBottom: '10px', wordBreak: 'break-all' }}>
-              <strong>密钥：</strong>{setupInfo.secret}
-            </div>
-            <div style={{ marginBottom: '12px', wordBreak: 'break-all', color: '#64748b' }}>
-              otpauth URL: {setupInfo.otpauth_url}
-            </div>
-            <Text style={{ color: '#64748b', lineHeight: 1.8 }}>
-              请在 Google Authenticator 中选择“输入设置密钥”，录入上面的账户、发行方和密钥，然后输入当前 6 位动态验证码完成绑定。
-            </Text>
           </div>
         )}
 

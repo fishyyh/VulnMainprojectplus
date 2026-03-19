@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"vulnmain/services"
 
 	"vulnmain/models"
@@ -11,6 +12,19 @@ import (
 )
 
 var systemService = &services.SystemService{}
+
+func maskSensitiveConfigValue(key, value string) string {
+	lowerKey := strings.ToLower(key)
+	if value == "" {
+		return value
+	}
+
+	if strings.Contains(lowerKey, "password") || strings.Contains(lowerKey, "secret") {
+		return "********"
+	}
+
+	return value
+}
 
 // GetPublicSystemInfo 获取公开的系统信息（无需认证）
 func GetPublicSystemInfo(c *gin.Context) {
@@ -71,9 +85,7 @@ func GetSystemConfigs(c *gin.Context) {
 
 	// 对敏感信息进行脱敏处理
 	for i := range configs {
-		if (configs[i].Key == "email.password" || configs[i].Key == "ldap.bind_password") && configs[i].Value != "" {
-			configs[i].Value = "********" // 用星号替换密码
-		}
+		configs[i].Value = maskSensitiveConfigValue(configs[i].Key, configs[i].Value)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -97,9 +109,7 @@ func GetSystemConfig(c *gin.Context) {
 	}
 
 	// 对敏感信息进行脱敏处理
-	if (config.Key == "email.password" || config.Key == "ldap.bind_password") && config.Value != "" {
-		config.Value = "********" // 用星号替换密码
-	}
+	config.Value = maskSensitiveConfigValue(config.Key, config.Value)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -437,7 +447,6 @@ func TestEmailConfig(c *gin.Context) {
 		"msg":  "测试邮件发送成功",
 	})
 }
-
 
 // TestLDAPConfig 测试LDAP配置连接
 func TestLDAPConfig(c *gin.Context) {

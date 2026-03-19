@@ -402,7 +402,7 @@ type WeeklyReport struct {
 	WeekStart       string     `json:"week_start"`        // 周开始日期
 	WeekEnd         string     `json:"week_end"`          // 周结束日期
 	FileName        string     `json:"file_name"`         // PDF文件名
-	FilePath        string     `json:"file_path"`         // PDF文件路径
+	FilePath        string     `json:"-"`                 // PDF文件路径
 	FileSize        int64      `json:"file_size"`         // 文件大小（字节）
 	TotalSubmitted  int64      `json:"total_submitted"`   // 本周提交漏洞总数
 	TotalFixed      int64      `json:"total_fixed"`       // 本周修复漏洞总数

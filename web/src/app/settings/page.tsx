@@ -30,7 +30,7 @@ import {
   IconUser,
   IconShield
 } from '@douyinfe/semi-icons';
-import { systemApi, SystemConfig, ConfigUpdateRequest, weeklyReportApi, resolveImageUrl, mfaAdminApi, User } from '@/lib/api';
+import { systemApi, SystemConfig, ConfigUpdateRequest, weeklyReportApi, mfaAdminApi, User } from '@/lib/api';
 import { notifyPasswordPolicyUpdated } from '@/utils/password';
 import { notifySystemInfoUpdated } from '@/utils/system';
 
@@ -693,12 +693,13 @@ export default function SettingsPage() {
   };
 
   // 预览周报
-  const handlePreviewReport = async (fileName: string) => {
+  const handlePreviewReport = async (reportId: number) => {
     try {
-      // 构建后端API静态文件URL
-      const pdfUrl = resolveImageUrl(`/uploads/weekly/${fileName}`);
-
-      // 设置预览URL并打开模态框
+      if (previewPdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewPdfUrl);
+      }
+      const pdfBlob = await weeklyReportApi.previewHistoryReport(reportId);
+      const pdfUrl = URL.createObjectURL(pdfBlob);
       setPreviewPdfUrl(pdfUrl);
       setPdfPreviewVisible(true);
     } catch (error) {
@@ -709,21 +710,25 @@ export default function SettingsPage() {
 
   // 关闭PDF预览
   const handleClosePdfPreview = () => {
+    if (previewPdfUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewPdfUrl);
+    }
     setPdfPreviewVisible(false);
     setPreviewPdfUrl('');
   };
 
   // 下载周报
-  const handleDownloadReport = async (fileName: string) => {
+  const handleDownloadReport = async (reportId: number, fileName: string) => {
     try {
-      // 构建后端API静态文件URL
-      const url = resolveImageUrl(`/uploads/weekly/${fileName}`);
+      const blob = await weeklyReportApi.downloadHistoryReport(reportId);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('下载周报失败:', error);
       Toast.error('下载周报失败');
@@ -1053,7 +1058,7 @@ export default function SettingsPage() {
                           theme="borderless"
                           type="primary"
                           size="small"
-                          onClick={() => handlePreviewReport(record.file_name)}
+                          onClick={() => handlePreviewReport(record.id)}
                         >
                           预览
                         </Button>
@@ -1061,7 +1066,7 @@ export default function SettingsPage() {
                           theme="borderless"
                           type="secondary"
                           size="small"
-                          onClick={() => handleDownloadReport(record.file_name)}
+                          onClick={() => handleDownloadReport(record.id, record.file_name)}
                         >
                           下载
                         </Button>

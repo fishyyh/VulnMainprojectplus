@@ -50,12 +50,6 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 	// 添加CORS中间件，允许跨域请求
 	r.Use(CORSMiddleware())
 
-	// 静态文件服务 - 提供上传的文件访问
-	r.Static("/uploads", "./uploads")
-
-	// 专门为周报PDF文件提供静态访问
-	r.Static("/weekly-reports", "./uploads/weekly")
-
 	// 公开API组 - 不需要JWT认证的接口
 	// 这些接口可以匿名访问，主要用于用户登录和令牌刷新
 	publicAPI := r.Group("/api")
@@ -85,9 +79,10 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		authAPI.PUT("/user/password", api.ChangePassword)       // 修改当前用户密码
 		authAPI.PUT("/user/profile", api.UpdateProfile)         // 修改当前用户个人信息
 		authAPI.POST("/upload/vuln-image", api.UploadVulnImage) // 上传漏洞相关图片
-		authAPI.GET("/mfa/status", api.GetMFAStatus)            // 获取当前用户MFA状态
-		authAPI.POST("/mfa/setup", api.SetupMFA)                // 生成MFA绑定信息
-		authAPI.POST("/mfa/enable", api.EnableMFA)              // 启用MFA
+		authAPI.GET("/upload/vuln-image/:filename", api.GetVulnImage)
+		authAPI.GET("/mfa/status", api.GetMFAStatus) // 获取当前用户MFA状态
+		authAPI.POST("/mfa/setup", api.SetupMFA)     // 生成MFA绑定信息
+		authAPI.POST("/mfa/enable", api.EnableMFA)   // 启用MFA
 
 		// 仪表板模块 - 需要首页查看权限
 		dashboardAPI := authAPI.Group("/dashboard")

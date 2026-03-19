@@ -3,7 +3,8 @@
 package utils
 
 import (
-	"errors"             // 导入错误处理包
+	"errors" // 导入错误处理包
+	"fmt"
 	"strconv"            // 导入字符串转换包，用于配置值转换
 	"time"               // 导入时间包，用于处理过期时间
 	Init "vulnmain/Init" // 导入初始化包，获取数据库连接
@@ -36,8 +37,7 @@ func GetJWTSecret() string {
 	var config models.SystemConfig
 	// 查询JWT密钥配置
 	if err := db.Where("`key` = ?", "auth.jwt.secret").First(&config).Error; err != nil {
-		// 如果没有找到配置，返回默认密钥
-		return "vulnmain_default_secret"
+		return ""
 	}
 	// 返回配置中的密钥值
 	return config.Value
@@ -67,6 +67,11 @@ func GetJWTExpire() time.Duration {
 // GenerateToken函数为用户生成JWT令牌
 // 根据用户信息创建包含用户ID、用户名、角色等信息的JWT令牌
 func GenerateToken(user *models.User) (string, error) {
+	secret := GetJWTSecret()
+	if secret == "" {
+		return "", fmt.Errorf("JWT密钥未配置")
+	}
+
 	// 获取当前时间
 	nowTime := time.Now()
 	// 计算令牌过期时间
@@ -87,7 +92,7 @@ func GenerateToken(user *models.User) (string, error) {
 	// 使用HS256算法创建令牌
 	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	// 使用密钥签名令牌
-	token, err := tokenClaims.SignedString([]byte(GetJWTSecret()))
+	token, err := tokenClaims.SignedString([]byte(secret))
 
 	return token, err
 }
@@ -95,10 +100,15 @@ func GenerateToken(user *models.User) (string, error) {
 // ParseToken函数解析JWT令牌
 // 验证令牌有效性并返回令牌中的声明信息
 func ParseToken(token string) (*Claims, error) {
+	secret := GetJWTSecret()
+	if secret == "" {
+		return nil, fmt.Errorf("JWT密钥未配置")
+	}
+
 	// 解析JWT令牌
 	tokenClaims, err := jwt.ParseWithClaims(token, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// 返回用于验证签名的密钥
-		return []byte(GetJWTSecret()), nil
+		return []byte(secret), nil
 	})
 
 	// 如果令牌解析成功
@@ -114,6 +124,11 @@ func ParseToken(token string) (*Claims, error) {
 }
 
 func GenerateMFAToken(user *models.User) (string, error) {
+	secret := GetJWTSecret()
+	if secret == "" {
+		return "", fmt.Errorf("JWT密钥未配置")
+	}
+
 	nowTime := time.Now()
 	expireTime := nowTime.Add(10 * time.Minute)
 
@@ -129,12 +144,17 @@ func GenerateMFAToken(user *models.User) (string, error) {
 	}
 
 	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return tokenClaims.SignedString([]byte(GetJWTSecret()))
+	return tokenClaims.SignedString([]byte(secret))
 }
 
 func ParseMFAToken(token string) (*MFAClaims, error) {
+	secret := GetJWTSecret()
+	if secret == "" {
+		return nil, fmt.Errorf("JWT密钥未配置")
+	}
+
 	tokenClaims, err := jwt.ParseWithClaims(token, &MFAClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(GetJWTSecret()), nil
+		return []byte(secret), nil
 	})
 
 	if tokenClaims != nil {

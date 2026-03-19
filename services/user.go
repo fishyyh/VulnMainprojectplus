@@ -1,11 +1,16 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	Init "vulnmain/Init"
 	"vulnmain/models"
@@ -451,32 +456,45 @@ func (s *UserService) GetUserStats() (map[string]interface{}, error) {
 }
 
 // UploadVulnImage 上传漏洞相关图片
-func (s *UserService) UploadVulnImage(userID uint, file *multipart.FileHeader, baseURL string) (string, error) {
+func (s *UserService) UploadVulnImage(userID uint, file *multipart.FileHeader) (string, error) {
+	db := Init.GetDB()
+
 	// 创建上传目录
 	uploadDir := "uploads/vuln-images"
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return "", errors.New("创建上传目录失败")
 	}
 
-	// 生成唯一文件名
-	fileExt := filepath.Ext(file.Filename)
-	if fileExt == "" {
-		// 如果没有扩展名，根据Content-Type设置
-		contentType := file.Header.Get("Content-Type")
-		switch contentType {
-		case "image/jpeg", "image/jpg":
-			fileExt = ".jpg"
-		case "image/png":
-			fileExt = ".png"
-		case "image/gif":
-			fileExt = ".gif"
-		case "image/webp":
-			fileExt = ".webp"
-		default:
-			fileExt = ".jpg"
-		}
+	// 读取文件头并根据真实内容判断类型，避免仅依赖扩展名或客户端上报的Content-Type
+	sniffSrc, err := file.Open()
+	if err != nil {
+		return "", errors.New("打开文件失败")
 	}
 
+	header := make([]byte, 512)
+	n, readErr := sniffSrc.Read(header)
+	sniffSrc.Close()
+	if readErr != nil && readErr != io.EOF {
+		return "", errors.New("读取文件失败")
+	}
+
+	contentType := http.DetectContentType(header[:n])
+
+	var fileExt string
+	switch contentType {
+	case "image/jpeg":
+		fileExt = ".jpg"
+	case "image/png":
+		fileExt = ".png"
+	case "image/gif":
+		fileExt = ".gif"
+	case "image/webp":
+		fileExt = ".webp"
+	default:
+		return "", errors.New("仅支持上传 JPG、PNG、GIF、WEBP 图片")
+	}
+
+	// 生成唯一文件名
 	fileName := fmt.Sprintf("vuln_img_%d_%d%s", userID, time.Now().Unix(), fileExt)
 	filePath := filepath.Join(uploadDir, fileName)
 
@@ -494,16 +512,99 @@ func (s *UserService) UploadVulnImage(userID uint, file *multipart.FileHeader, b
 	defer dst.Close()
 
 	// 复制文件内容
-	if _, err := dst.ReadFrom(src); err != nil {
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(dst, hasher), src); err != nil {
 		return "", errors.New("保存文件失败")
 	}
 
-	// 生成访问URL
-	imageURL := fmt.Sprintf("%s/uploads/vuln-images/%s", baseURL, fileName)
+	hashValue := hex.EncodeToString(hasher.Sum(nil))
+
+	storage := models.FileStorage{
+		FileName:  fileName,
+		FilePath:  filePath,
+		FileSize:  file.Size,
+		MimeType:  contentType,
+		Hash:      hashValue,
+		UserID:    userID,
+		Category:  "vuln_image",
+		CreatedAt: time.Now().Truncate(time.Second),
+	}
+
+	if err := db.Create(&storage).Error; err != nil {
+		return "", errors.New("保存文件记录失败")
+	}
+
+	// 返回相对路径，由前端统一解析后端地址
+	imageURL := fmt.Sprintf("/uploads/vuln-images/%s", fileName)
 
 	return imageURL, nil
 }
 
+func (s *UserService) GetVulnImage(userID uint, roleCode, filename string) (string, []byte, error) {
+	db := Init.GetDB()
+
+	safeName := filepath.Base(strings.TrimSpace(filename))
+	if safeName == "" || safeName == "." || safeName == ".." || safeName != strings.TrimSpace(filename) {
+		return "", nil, errors.New("图片不存在")
+	}
+
+	virtualPath := fmt.Sprintf("/uploads/vuln-images/%s", safeName)
+	defaultFilePath := filepath.Join("uploads", "vuln-images", safeName)
+
+	var storage models.FileStorage
+	recordExists := db.Where("file_name = ? AND category = ?", safeName, "vuln_image").First(&storage).Error == nil
+
+	authorized := roleCode == "super_admin" || roleCode == "admin" || roleCode == "security_engineer"
+	if !authorized && recordExists && storage.UserID == userID {
+		authorized = true
+	}
+
+	if !authorized {
+		var vulns []models.Vulnerability
+		pattern := "%" + virtualPath + "%"
+		if err := db.Preload("Watchers").
+			Where("(description LIKE ? OR fix_suggestion LIKE ? OR poc LIKE ? OR solution LIKE ? OR `references` LIKE ?)",
+				pattern, pattern, pattern, pattern, pattern).
+			Find(&vulns).Error; err != nil {
+			return "", nil, errors.New("图片不存在")
+		}
+
+		vulnSvc := &VulnService{}
+		for i := range vulns {
+			if vulnSvc.hasVulnViewAccess(&vulns[i], userID, roleCode) {
+				authorized = true
+				break
+			}
+		}
+	}
+
+	if !authorized {
+		return "", nil, errors.New("图片不存在")
+	}
+
+	filePath := defaultFilePath
+	if recordExists && storage.FilePath != "" {
+		filePath = storage.FilePath
+	}
+
+	cleanPath := filepath.Clean(filePath)
+	expectedDir := filepath.Clean(filepath.Join("uploads", "vuln-images"))
+	if cleanPath != expectedDir && !strings.HasPrefix(cleanPath, expectedDir+string(os.PathSeparator)) {
+		return "", nil, errors.New("图片不存在")
+	}
+
+	fileData, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return "", nil, errors.New("图片不存在")
+	}
+
+	contentType := http.DetectContentType(fileData)
+	if recordExists && storage.MimeType != "" {
+		contentType = storage.MimeType
+	}
+
+	return contentType, fileData, nil
+}
 
 // GetRoles 获取角色列表
 func (s *UserService) GetRoles() ([]models.Role, error) {

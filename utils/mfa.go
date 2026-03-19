@@ -43,7 +43,11 @@ func BuildTOTPKeyURI(issuer, accountName, secret string) string {
 }
 
 func EncryptMFASecret(secret string) (string, error) {
-	key := deriveMFAKey()
+	key, err := deriveMFAKey()
+	if err != nil {
+		return "", err
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -69,7 +73,11 @@ func DecryptMFASecret(cipherText string) (string, error) {
 		return "", err
 	}
 
-	key := deriveMFAKey()
+	key, err := deriveMFAKey()
+	if err != nil {
+		return "", err
+	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -108,9 +116,14 @@ func VerifyTOTPCode(secret, code string, allowedDrift int) (bool, int64) {
 	return false, 0
 }
 
-func deriveMFAKey() []byte {
-	sum := sha256.Sum256([]byte(GetJWTSecret()))
-	return sum[:]
+func deriveMFAKey() ([]byte, error) {
+	secret := GetJWTSecret()
+	if secret == "" {
+		return nil, fmt.Errorf("mfa encryption key is not configured")
+	}
+
+	sum := sha256.Sum256([]byte(secret))
+	return sum[:], nil
 }
 
 func generateTOTPCode(secret string, counter int64) string {

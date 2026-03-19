@@ -6,9 +6,61 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1/api';
 // 后端基础URL（用于静态文件访问）
 const BACKEND_BASE_URL = API_BASE_URL.replace('/api', '');
 
+const extractImagePathname = (imageUrl: string): string => {
+  if (!imageUrl) return '';
+
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    return imageUrl;
+  }
+
+  try {
+    return new URL(imageUrl, BACKEND_BASE_URL).pathname;
+  } catch {
+    return imageUrl;
+  }
+};
+
+export const isProtectedVulnImageUrl = (imageUrl: string): boolean => {
+  const pathname = extractImagePathname(imageUrl);
+  return pathname.startsWith('/uploads/vuln-images/') || pathname.startsWith('/api/upload/vuln-image/');
+};
+
+export const resolveProtectedVulnImageApiUrl = (imageUrl: string): string => {
+  const pathname = extractImagePathname(imageUrl);
+  if (pathname.startsWith('/api/upload/vuln-image/')) {
+    return `${BACKEND_BASE_URL}${pathname}`;
+  }
+
+  const fileName = pathname.split('/').pop() || '';
+  return `${API_BASE_URL}/upload/vuln-image/${encodeURIComponent(fileName)}`;
+};
+
+export const fetchProtectedImageObjectUrl = async (imageUrl: string): Promise<string> => {
+  if (!isProtectedVulnImageUrl(imageUrl)) {
+    return resolveImageUrl(imageUrl);
+  }
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+  const response = await fetch(resolveProtectedVulnImageApiUrl(imageUrl), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'same-origin',
+  });
+
+  if (!response.ok) {
+    throw new Error('图片加载失败');
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+};
+
 // 工具函数：处理图片URL，确保指向后端
 export const resolveImageUrl = (imageUrl: string): string => {
   if (!imageUrl) return '';
+
+  if (isProtectedVulnImageUrl(imageUrl)) {
+    return resolveProtectedVulnImageApiUrl(imageUrl);
+  }
   
   // 如果已经是完整URL，直接返回
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
@@ -726,6 +778,20 @@ export const weeklyReportApi = {
   // 手动生成并发送周报
   generateWeeklyReport: async (): Promise<ApiResponse<void>> => {
     const response = await api.post('/system/weekly-report/generate');
+    return response.data;
+  },
+
+  previewHistoryReport: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/system/weekly-report/file/${id}/preview`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  downloadHistoryReport: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/system/weekly-report/file/${id}/download`, {
+      responseType: 'blob'
+    });
     return response.data;
   },
 };
@@ -1461,7 +1527,6 @@ export interface WeeklyReportRecord {
   week_start: string;
   week_end: string;
   file_name: string;
-  file_path: string;
   file_size: number;
   total_submitted: number;
   total_fixed: number;
