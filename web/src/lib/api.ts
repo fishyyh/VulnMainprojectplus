@@ -946,7 +946,7 @@ export interface UserCreateRequest {
   username: string;
   email: string;
   phone: string;
-  password: string;
+  password?: string;
   real_name: string;
   department: string;
   role_id: number;

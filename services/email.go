@@ -17,13 +17,13 @@ import (
 
 // EmailConfig 邮件配置结构体
 type EmailConfig struct {
-	SMTPHost     string `json:"smtp_host"`     // SMTP服务器地址
-	SMTPPort     int    `json:"smtp_port"`     // SMTP服务器端口
-	Username     string `json:"username"`      // 邮箱账号
-	Password     string `json:"password"`      // 邮箱密码
-	UseSSL       bool   `json:"use_ssl"`       // 是否使用SSL加密
-	FromName     string `json:"from_name"`     // 发件人名称
-	FromEmail    string `json:"from_email"`    // 发件人邮箱
+	SMTPHost  string `json:"smtp_host"`  // SMTP服务器地址
+	SMTPPort  int    `json:"smtp_port"`  // SMTP服务器端口
+	Username  string `json:"username"`   // 邮箱账号
+	Password  string `json:"password"`   // 邮箱密码
+	UseSSL    bool   `json:"use_ssl"`    // 是否使用SSL加密
+	FromName  string `json:"from_name"`  // 发件人名称
+	FromEmail string `json:"from_email"` // 发件人邮箱
 }
 
 // EmailTemplate 邮件模板结构体
@@ -35,16 +35,16 @@ type EmailTemplate struct {
 // GetEmailConfig 从数据库获取邮件配置
 func GetEmailConfig() (*EmailConfig, error) {
 	db := Init.GetDB()
-	
+
 	config := &EmailConfig{}
-	
+
 	// 获取SMTP配置
 	var configs []models.SystemConfig
 	err := db.Where("`group` = 'email'").Find(&configs).Error
 	if err != nil {
 		return nil, fmt.Errorf("获取邮件配置失败: %v", err)
 	}
-	
+
 	// 解析配置
 	for _, cfg := range configs {
 		switch cfg.Key {
@@ -66,12 +66,12 @@ func GetEmailConfig() (*EmailConfig, error) {
 			config.FromEmail = cfg.Value
 		}
 	}
-	
+
 	// 验证必要配置
 	if config.SMTPHost == "" || config.SMTPPort == 0 || config.Username == "" || config.Password == "" {
 		return nil, fmt.Errorf("邮件配置不完整，请检查SMTP配置")
 	}
-	
+
 	// 设置默认值
 	if config.FromName == "" {
 		config.FromName = "VulnMain系统"
@@ -79,7 +79,7 @@ func GetEmailConfig() (*EmailConfig, error) {
 	if config.FromEmail == "" {
 		config.FromEmail = config.Username
 	}
-	
+
 	return config, nil
 }
 
@@ -151,7 +151,7 @@ func SendEmail(to []string, subject, body string) error {
 // GetProjectCreatedTemplate 项目创建通知模板
 func GetProjectCreatedTemplate(projectName, ownerName string, members []string) EmailTemplate {
 	subject := fmt.Sprintf("【VulnMain】您已被添加到项目：%s", projectName)
-	
+
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -188,7 +188,7 @@ func GetProjectCreatedTemplate(projectName, ownerName string, members []string) 
 </body>
 </html>
 	`, projectName, ownerName, strings.Join(members, "、"), time.Now().Format("2006-01-02 15:04:05"))
-	
+
 	return EmailTemplate{Subject: subject, Body: body}
 }
 
@@ -258,7 +258,7 @@ func GetProjectMemberAddedTemplate(projectName, ownerName string, members []stri
 // GetVulnAssignedTemplate 漏洞分派通知模板
 func GetVulnAssignedTemplate(vulnTitle, projectName, assigneeName, severity string) EmailTemplate {
 	subject := fmt.Sprintf("【VulnMain】新漏洞分派：%s", vulnTitle)
-	
+
 	severityColor := "#28a745" // 默认绿色
 	switch severity {
 	case "critical":
@@ -270,7 +270,7 @@ func GetVulnAssignedTemplate(vulnTitle, projectName, assigneeName, severity stri
 	case "low":
 		severityColor = "#28a745" // 绿色
 	}
-	
+
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -309,14 +309,14 @@ func GetVulnAssignedTemplate(vulnTitle, projectName, assigneeName, severity stri
 </body>
 </html>
 	`, assigneeName, vulnTitle, projectName, severityColor, severity, time.Now().Format("2006-01-02 15:04:05"))
-	
+
 	return EmailTemplate{Subject: subject, Body: body}
 }
 
 // GetVulnStatusChangedTemplate 漏洞状态变更通知模板
 func GetVulnStatusChangedTemplate(vulnTitle, projectName, oldStatus, newStatus, nextUserName string) EmailTemplate {
 	subject := fmt.Sprintf("【VulnMain】漏洞状态更新：%s", vulnTitle)
-	
+
 	statusMap := map[string]string{
 		"unfixed":   "未修复",
 		"fixing":    "修复中",
@@ -325,7 +325,7 @@ func GetVulnStatusChangedTemplate(vulnTitle, projectName, oldStatus, newStatus, 
 		"completed": "已完成",
 		"ignored":   "已忽略",
 	}
-	
+
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -368,7 +368,7 @@ func GetVulnStatusChangedTemplate(vulnTitle, projectName, oldStatus, newStatus, 
 </body>
 </html>
 	`, nextUserName, vulnTitle, projectName, statusMap[oldStatus], statusMap[newStatus], time.Now().Format("2006-01-02 15:04:05"))
-	
+
 	return EmailTemplate{Subject: subject, Body: body}
 }
 
@@ -421,6 +421,12 @@ func GetPasswordResetTemplate(userName, newPassword string) EmailTemplate {
 // GetUserRegisteredTemplate 用户注册成功通知模板
 func GetUserRegisteredTemplate(userName, userEmail, initialPassword string) EmailTemplate {
 	subject := "【VulnMain】欢迎加入VulnMain系统"
+	credentialsExtra := "<p><strong>登录方式：</strong>请使用 Google 账号单点登录</p>"
+	securityTip := `<p class="warning">⚠️ 当前系统已启用 Google 登录，请使用已授权邮箱完成登录。</p>`
+	if strings.TrimSpace(initialPassword) != "" {
+		credentialsExtra = fmt.Sprintf("<p><strong>初始密码：</strong>%s</p>", initialPassword)
+		securityTip = `<p class="warning">⚠️ 为了您的账户安全，请在首次登录后立即修改密码。</p>`
+	}
 
 	body := fmt.Sprintf(`
 <!DOCTYPE html>
@@ -452,10 +458,10 @@ func GetUserRegisteredTemplate(userName, userEmail, initialPassword string) Emai
                 <p><strong>登录信息：</strong></p>
                 <p><strong>用户名：</strong>%s</p>
                 <p><strong>邮箱：</strong>%s</p>
-                <p><strong>初始密码：</strong>%s</p>
+                %s
             </div>
 
-            <p class="warning">⚠️ 为了您的账户安全，请在首次登录后立即修改密码。</p>
+            %s
 
             <p><strong>系统功能：</strong></p>
             <ul>
@@ -474,7 +480,7 @@ func GetUserRegisteredTemplate(userName, userEmail, initialPassword string) Emai
     </div>
 </body>
 </html>
-	`, userName, userName, userEmail, initialPassword, time.Now().Format("2006-01-02 15:04:05"))
+	`, userName, userName, userEmail, credentialsExtra, securityTip, time.Now().Format("2006-01-02 15:04:05"))
 
 	return EmailTemplate{Subject: subject, Body: body}
 }
@@ -514,15 +520,15 @@ func GetVulnDeadlineReminderTemplate(vulnTitle, projectName, assigneeName, sever
 
 	// 状态显示名称
 	statusMap := map[string]string{
-		"pending":    "待处理",
-		"confirmed":  "已确认",
-		"rejected":   "已拒绝",
-		"unfixed":    "未修复",
-		"fixing":     "修复中",
-		"fixed":      "已修复",
-		"retesting":  "复测中",
-		"completed":  "已完成",
-		"ignored":    "已忽略",
+		"pending":   "待处理",
+		"confirmed": "已确认",
+		"rejected":  "已拒绝",
+		"unfixed":   "未修复",
+		"fixing":    "修复中",
+		"fixed":     "已修复",
+		"retesting": "复测中",
+		"completed": "已完成",
+		"ignored":   "已忽略",
 	}
 	statusDisplay := statusMap[status]
 	if statusDisplay == "" {

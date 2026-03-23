@@ -28,7 +28,6 @@ import {
   IconUser,
   IconRefresh,
   IconSearch,
-  IconKey,
   IconUserGroup
 } from '@douyinfe/semi-icons';
 import {
@@ -70,15 +69,10 @@ export default function UsersPage() {
   const isAdmin = authUtils.hasAnyRole(['super_admin', 'admin'], currentUser);
 
   // 密码验证状态
-    const [createPasswordValidation, setCreatePasswordValidation] = useState<PasswordValidationResult | null>(null);
   const [resetPasswordValidation, setResetPasswordValidation] = useState<PasswordValidationResult | null>(null);
 
-  const [passwordsMatch, setPasswordsMatch] = useState({ create: false, reset: false });
-  const [createFormValues, setCreateFormValues] = useState<any>({});
+  const [resetPasswordsMatch, setResetPasswordsMatch] = useState(false);
   const [resetFormValues, setResetFormValues] = useState<any>({});
-  const handleCreatePasswordValidationChange = useCallback((result: PasswordValidationResult) => {
-    setCreatePasswordValidation(result);
-  }, []);
 
   const handleResetPasswordValidationChange = useCallback((result: PasswordValidationResult) => {
     setResetPasswordValidation(result);
@@ -157,9 +151,7 @@ export default function UsersPage() {
         if (formRef.current) {
       formRef.current.reset();
     }
-    setCreatePasswordValidation(null);
-    setPasswordsMatch({ create: false, reset: false });
-    setCreateFormValues({});
+    setResetPasswordsMatch(false);
     setModalVisible(true);
   };
 
@@ -226,22 +218,6 @@ export default function UsersPage() {
         status: values.status,
       };
 
-      if (!editingUser) {
-        // 创建用户时需要密码和验证
-        if (values.password !== values.confirmPassword) {
-          Toast.error('两次输入的密码不一致');
-          return;
-        }
-        // 重新验证密码以确保最新状态
-        const { validatePassword } = await import('@/utils/password');
-        const currentValidation = await validatePassword(values.password);
-        if (!currentValidation.isValid) {
-          Toast.error('密码不符合安全要求，请检查密码强度提示');
-          return;
-        }
-        (userData as UserCreateRequest).password = values.password;
-      }
-
       let response;
       if (editingUser) {
         const userId = editingUser.ID || editingUser.id;
@@ -284,7 +260,7 @@ export default function UsersPage() {
       resetPasswordFormRef.current.reset();
     }
     setResetPasswordValidation(null);
-    setPasswordsMatch({ create: false, reset: false });
+    setResetPasswordsMatch(false);
     setResetFormValues({});
     setResetPasswordModalVisible(true);
   };
@@ -447,14 +423,6 @@ export default function UsersPage() {
           </Button>
           <Button
             theme="borderless"
-            icon={<IconKey />}
-            size="small"
-            onClick={() => handleResetPassword(record)}
-          >
-            重置密码
-          </Button>
-          <Button
-            theme="borderless"
             type={record.status === 1 ? 'danger' : 'primary'}
             size="small"
             onClick={() => handleToggleStatus(record)}
@@ -604,11 +572,6 @@ export default function UsersPage() {
             console.error('用户表单验证失败:', errors);
             Toast.error('请检查表单输入');
           }}
-          onValueChange={(values) => {
-            setCreateFormValues(values);
-            const match = !!values.password && !!values.confirmPassword && values.password === values.confirmPassword;
-            setPasswordsMatch(prev => ({ ...prev, create: match }));
-          }}
           labelPosition="left"
           labelAlign="left"
           labelWidth={80}
@@ -680,51 +643,9 @@ export default function UsersPage() {
             />
 
             {!editingUser && (
-              <>
-                <div style={{ marginBottom: '16px' }}>
-                  <Form.Input
-                    field="password"
-                    label="密码"
-                    type="password"
-                    placeholder="请输入密码"
-                    rules={[
-                      { required: true, message: '请输入密码' }
-                    ]}
-                  />
-                  <Form.Slot field="password">
-                    {({ value }: { value: any }) => (
-                      <div style={{ marginLeft: '80px', marginTop: '8px' }}>
-                        <PasswordStrengthIndicator
-                          password={value || ''}
-                          onValidationChange={handleCreatePasswordValidationChange}
-                          showRequirements={true}
-                        />
-                      </div>
-                    )}
-                  </Form.Slot>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <Form.Input
-                    field="confirmPassword"
-                    label="确认密码"
-                    type="password"
-                    placeholder="请再次输入密码"
-                    rules={[
-                      { required: true, message: '请确认密码' },
-                      {
-                        validator: (rule, value) => {
-                          const password = createFormValues.password;
-                          if (value && password && value !== password) {
-                            return false;
-                          }
-                          return true;
-                        },
-                        message: '两次输入的密码不一致',
-                      },
-                    ]}
-                  />
-                </div>
-              </>
+              <div style={{ marginBottom: '16px', marginLeft: '80px' }}>
+                <Text type="secondary">当前系统为 Google 登录模式，创建用户无需设置密码。</Text>
+              </div>
             )}
 
 
@@ -784,7 +705,7 @@ export default function UsersPage() {
             <Button onClick={() => setModalVisible(false)} size="large">
               取消
             </Button>
-                                    <Button theme="solid" type="primary" htmlType="submit" size="large" disabled={!editingUser && !passwordsMatch.create}>
+                                    <Button theme="solid" type="primary" htmlType="submit" size="large">
               {editingUser ? '更新' : '创建'}
             </Button>
           </div>
@@ -851,7 +772,7 @@ export default function UsersPage() {
             onValueChange={(values) => {
               setResetFormValues(values);
               const match = !!values.password && !!values.confirmPassword && values.password === values.confirmPassword;
-              setPasswordsMatch(prev => ({ ...prev, reset: match }));
+              setResetPasswordsMatch(match);
             }}
           >
             <div style={{ marginBottom: '24px' }}>
@@ -917,13 +838,13 @@ export default function UsersPage() {
               >
                 取消
               </Button>
-                                          <Button
+              <Button
                 theme="solid"
                 type="primary"
                 htmlType="submit"
                 size="large"
                 style={{ minWidth: '100px' }}
-                disabled={!passwordsMatch.reset}
+                disabled={!resetPasswordsMatch}
               >
                 确认重置
               </Button>

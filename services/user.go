@@ -1,7 +1,9 @@
 package services
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,7 +24,7 @@ type UserService struct{}
 type UserCreateRequest struct {
 	Username   string `json:"username" binding:"required"`
 	Email      string `json:"email" binding:"required,email"`
-	Password   string `json:"password" binding:"required,min=6"`
+	Password   string `json:"password" binding:"omitempty,min=6"`
 	RealName   string `json:"real_name"`
 	Phone      string `json:"phone"`
 	Department string `json:"department"`
@@ -59,6 +61,15 @@ type UserListResponse struct {
 	TotalPages  int           `json:"total_pages"`
 }
 
+func generatePlaceholderPassword() (string, error) {
+	randomBytes := make([]byte, 24)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
+}
+
 // CreateUser 创建用户
 func (s *UserService) CreateUser(req *UserCreateRequest) (*models.User, error) {
 	db := Init.GetDB()
@@ -86,13 +97,23 @@ func (s *UserService) CreateUser(req *UserCreateRequest) (*models.User, error) {
 		Source:     "local",
 	}
 
-	// 验证密码复杂度
-	if err := utils.ValidatePassword(req.Password); err != nil {
-		return nil, err
+	initialPassword := strings.TrimSpace(req.Password)
+	if initialPassword != "" {
+		// 兼容旧调用：如果传了密码，仍执行复杂度校验
+		if err := utils.ValidatePassword(initialPassword); err != nil {
+			return nil, err
+		}
+	} else {
+		// Google 登录模式下创建用户不需要输入密码，这里仅生成占位密码满足非空约束
+		generatedPassword, err := generatePlaceholderPassword()
+		if err != nil {
+			return nil, errors.New("生成用户凭证失败")
+		}
+		initialPassword = generatedPassword
 	}
 
 	// 设置密码
-	if err := user.SetPassword(req.Password); err != nil {
+	if err := user.SetPassword(initialPassword); err != nil {
 		return nil, errors.New("密码设置失败")
 	}
 
@@ -110,7 +131,7 @@ func (s *UserService) CreateUser(req *UserCreateRequest) (*models.User, error) {
 			userName = user.Username
 		}
 
-		if err := SendUserRegisteredNotification(userName, user.Email, req.Password); err != nil {
+		if err := SendUserRegisteredNotification(userName, user.Email, ""); err != nil {
 			// 记录邮件发送失败的日志，但不影响用户创建
 			fmt.Printf("发送用户注册通知邮件失败: %v\n", err)
 		}
