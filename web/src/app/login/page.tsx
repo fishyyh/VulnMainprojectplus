@@ -11,8 +11,8 @@ export default function LoginPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [systemInfo, setSystemInfo] = useState<SystemInfo>({
-    system_name: 'VulnMain',
-    company_name: 'VulnMain',
+    system_name: 'VMP',
+    company_name: 'VMP',
     logo: '',
     version: '1.0.0'
   });

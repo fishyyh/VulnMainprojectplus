@@ -25,6 +25,11 @@ export default function MarkdownEditor({
   const [allowedTypes, setAllowedTypes] = useState<string[]>(['jpg', 'jpeg', 'png', 'gif']); // 默认允许的图片类型
   const [maxSize, setMaxSize] = useState<number>(5); // 默认5MB
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const valueRef = useRef<string>(value || '');
+
+  useEffect(() => {
+    valueRef.current = value || '';
+  }, [value]);
 
   // 获取系统上传配置
   useEffect(() => {
@@ -93,50 +98,123 @@ export default function MarkdownEditor({
     }
   };
 
-
-
-  // 处理文件选择
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // 获取文件扩展名
+  const resolveFileExtension = (file: File): string => {
     const fileName = file.name.toLowerCase();
-    const fileExtension = fileName.split('.').pop() || '';
+    const extensionFromName = fileName.split('.').pop() || '';
+    if (extensionFromName) return extensionFromName;
 
-    // 检查文件类型 - 使用系统配置的允许类型
-    if (!allowedTypes.includes(fileExtension)) {
-      Toast.error(`不支持的文件格式，请上传以下格式的图片：${allowedTypes.join(', ')}`);
-      return;
-    }
+    const extensionFromMime: Record<string, string> = {
+      'image/jpeg': 'jpeg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+    };
 
+    return extensionFromMime[file.type.toLowerCase()] || '';
+  };
+
+  const validateImageFile = (file: File): boolean => {
     // 检查文件是否为图片类型
     if (!file.type.startsWith('image/')) {
       Toast.error('请选择图片文件');
-      return;
+      return false;
+    }
+
+    // 获取文件扩展名，粘贴截图时可能没有文件名，需从 MIME 推断
+    const fileExtension = resolveFileExtension(file);
+    const normalizedExtension = fileExtension === 'jpeg' ? 'jpg' : fileExtension;
+    const normalizedAllowedTypes = allowedTypes.map(type => (type === 'jpeg' ? 'jpg' : type));
+
+    if (!fileExtension || !normalizedAllowedTypes.includes(normalizedExtension)) {
+      Toast.error(`不支持的文件格式，请上传以下格式的图片：${allowedTypes.join(', ')}`);
+      return false;
     }
 
     // 检查文件大小 - 使用系统配置的大小限制
     const maxSizeBytes = maxSize * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       Toast.error(`图片大小不能超过${maxSize}MB`);
+      return false;
+    }
+
+    return true;
+  };
+
+  const getImageAltText = (file: File): string => {
+    return file.name?.trim() || 'pasted-image';
+  };
+
+  // 处理文件选择
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!validateImageFile(file)) {
       return;
     }
 
     try {
       const imageUrl = await handleImageUpload(file);
-      
+
       // 插入markdown图片语法到编辑器
-      const imageMarkdown = `\n![${file.name}](${imageUrl})\n`;
-      const newValue = (value || '') + imageMarkdown;
+      const imageMarkdown = `\n![${getImageAltText(file)}](${imageUrl})\n`;
+      const newValue = valueRef.current + imageMarkdown;
       onChange?.(newValue);
-      
     } catch (error) {
       console.error('插入图片失败:', error);
     }
 
     // 重置file input
     event.target.value = '';
+  };
+
+  // 支持 Ctrl+V 粘贴图片上传
+  const handlePasteImage = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled || uploading) return;
+
+    const clipboardItems = Array.from(event.clipboardData.items || []);
+    const imageFiles = clipboardItems
+      .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+      .map(item => item.getAsFile())
+      .filter((file): file is File => file !== null);
+
+    if (imageFiles.length === 0) return;
+
+    // 粘贴板里有图片时，阻止默认行为，改为上传并插入 markdown 图片语法
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const selectionStart = textarea.selectionStart ?? valueRef.current.length;
+    const selectionEnd = textarea.selectionEnd ?? selectionStart;
+
+    void (async () => {
+      let imageMarkdown = '';
+
+      for (const file of imageFiles) {
+        if (!validateImageFile(file)) {
+          continue;
+        }
+
+        try {
+          const imageUrl = await handleImageUpload(file);
+          imageMarkdown += `\n![${getImageAltText(file)}](${imageUrl})\n`;
+        } catch (error) {
+          console.error('粘贴图片上传失败:', error);
+        }
+      }
+
+      if (!imageMarkdown) return;
+
+      const currentValue = valueRef.current;
+      const newValue = `${currentValue.slice(0, selectionStart)}${imageMarkdown}${currentValue.slice(selectionEnd)}`;
+      onChange?.(newValue);
+
+      const nextCursor = selectionStart + imageMarkdown.length;
+      requestAnimationFrame(() => {
+        textarea.selectionStart = nextCursor;
+        textarea.selectionEnd = nextCursor;
+      });
+    })();
   };
 
   return (
@@ -150,6 +228,7 @@ export default function MarkdownEditor({
         textareaProps={{
           placeholder,
           disabled,
+          onPaste: handlePasteImage,
           style: {
             fontSize: 14,
             lineHeight: 1.6,

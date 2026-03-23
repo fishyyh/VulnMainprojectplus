@@ -39,9 +39,9 @@ type DashboardData struct {
 
 // TrendDataItem 趋势数据项
 type TrendDataItem struct {
-	Date        string `json:"date"`
-	NewVulns    int64  `json:"new_vulns"`
-	FixedVulns  int64  `json:"fixed_vulns"`
+	Date         string `json:"date"`
+	NewVulns     int64  `json:"new_vulns"`
+	FixedVulns   int64  `json:"fixed_vulns"`
 	PendingVulns int64  `json:"pending_vulns"`
 }
 
@@ -67,10 +67,10 @@ type VulnListItem struct {
 
 // UserVulnStats 用户漏洞统计
 type UserVulnStats struct {
-	TotalCount      int64            `json:"total_count"`       // 所有历史漏洞总数
-	MonthlyCount    int64            `json:"monthly_count"`     // 当月提交漏洞数
-	StatusStats     map[string]int64 `json:"status_stats"`
-	DueSoonCount    int64            `json:"due_soon_count"`
+	TotalCount   int64            `json:"total_count"`   // 所有历史漏洞总数
+	MonthlyCount int64            `json:"monthly_count"` // 当月提交漏洞数
+	StatusStats  map[string]int64 `json:"status_stats"`
+	DueSoonCount int64            `json:"due_soon_count"`
 }
 
 // GetDashboardData 获取仪表板数据
@@ -94,7 +94,9 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	}
 
 	// 总漏洞数
-	db.Model(&models.Vulnerability{}).Count(&data.TotalVulns)
+	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
+		Count(&data.TotalVulns)
 
 	// 总项目数
 	db.Model(&models.Project{}).Where("status != ?", "archived").Count(&data.TotalProjects)
@@ -102,6 +104,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	// 即将到期漏洞数（7天内）
 	sevenDaysLater := time.Now().AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("fix_deadline IS NOT NULL AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')", sevenDaysLater).
 		Count(&data.DueSoonVulns)
 
@@ -112,6 +115,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	}
 	db.Model(&models.Vulnerability{}).
 		Select("status, COUNT(*) as count").
+		Where("deleted_at IS NULL").
 		Group("status").
 		Scan(&statusStats)
 
@@ -125,7 +129,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	db.Table("vulnerabilities").
 		Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 		Joins("JOIN users ON vulnerabilities.reporter_id = users.id").
-		Where("vulnerabilities.submitted_at >= ? AND vulnerabilities.submitted_at < ?",
+		Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.submitted_at >= ? AND vulnerabilities.submitted_at < ?",
 			currentMonth+"-01", getNextMonthStart(currentMonth)).
 		Group("users.id").
 		Order("count DESC").
@@ -140,7 +144,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	db.Table("vulnerabilities").
 		Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 		Joins("JOIN users ON vulnerabilities.fixed_by = users.id").
-		Where("vulnerabilities.fixed_at >= ? AND vulnerabilities.fixed_at < ? AND vulnerabilities.fixed_by IS NOT NULL",
+		Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.fixed_at >= ? AND vulnerabilities.fixed_at < ? AND vulnerabilities.fixed_by IS NOT NULL",
 			currentMonth+"-01", getNextMonthStart(currentMonth)).
 		Group("users.id").
 		Order("count DESC").
@@ -152,7 +156,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 		db.Table("vulnerabilities").
 			Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 			Joins("JOIN users ON vulnerabilities.assignee_id = users.id").
-			Where("vulnerabilities.status IN ('fixed', 'closed', 'completed') AND vulnerabilities.updated_at >= ? AND vulnerabilities.updated_at < ? AND vulnerabilities.assignee_id IS NOT NULL",
+			Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.status IN ('fixed', 'closed', 'completed') AND vulnerabilities.updated_at >= ? AND vulnerabilities.updated_at < ? AND vulnerabilities.assignee_id IS NOT NULL",
 				currentMonth+"-01", getNextMonthStart(currentMonth)).
 			Group("users.id").
 			Order("count DESC").
@@ -168,6 +172,7 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 		Select("vulnerabilities.id, vulnerabilities.title, vulnerabilities.severity, vulnerabilities.status, vulnerabilities.submitted_at, vulnerabilities.fix_deadline, projects.name as project_name, users.real_name as reporter_name").
 		Joins("LEFT JOIN projects ON vulnerabilities.project_id = projects.id").
 		Joins("LEFT JOIN users ON vulnerabilities.reporter_id = users.id").
+		Where("vulnerabilities.deleted_at IS NULL").
 		Order("vulnerabilities.submitted_at DESC").
 		Limit(10).
 		Scan(&latestVulns)
@@ -187,12 +192,14 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 
 	// 当前用户所有提交的漏洞数（用于修复率计算）
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("reporter_id = ?", userID).
 		Count(&data.CurrentUserVulns.TotalCount)
 
 	// 当前用户当月提交的漏洞数
 	currentMonth := time.Now().Format("2006-01")
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("reporter_id = ? AND submitted_at >= ? AND submitted_at < ?",
 			userID, currentMonth+"-01", getNextMonthStart(currentMonth)).
 		Count(&data.CurrentUserVulns.MonthlyCount)
@@ -204,6 +211,7 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 	}
 	db.Model(&models.Vulnerability{}).
 		Select("status, COUNT(*) as count").
+		Where("deleted_at IS NULL").
 		Where("reporter_id = ?", userID).
 		Group("status").
 		Scan(&userStatusStats)
@@ -215,6 +223,7 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 	// 当前用户即将到期漏洞数
 	sevenDaysLater := time.Now().AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("reporter_id = ? AND fix_deadline IS NOT NULL AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')",
 			userID, sevenDaysLater).
 		Count(&data.CurrentUserVulns.DueSoonCount)
@@ -224,7 +233,7 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 	db.Table("vulnerabilities").
 		Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 		Joins("JOIN users ON vulnerabilities.reporter_id = users.id").
-		Where("vulnerabilities.submitted_at >= ? AND vulnerabilities.submitted_at < ?",
+		Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.submitted_at >= ? AND vulnerabilities.submitted_at < ?",
 			currentMonth+"-01", getNextMonthStart(currentMonth)).
 		Group("users.id").
 		Order("count DESC").
@@ -241,7 +250,8 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 	query := db.Table("vulnerabilities").
 		Select("vulnerabilities.id, vulnerabilities.title, vulnerabilities.severity, vulnerabilities.status, vulnerabilities.submitted_at, vulnerabilities.fix_deadline, projects.name as project_name, users.real_name as reporter_name").
 		Joins("LEFT JOIN projects ON vulnerabilities.project_id = projects.id").
-		Joins("LEFT JOIN users ON vulnerabilities.reporter_id = users.id")
+		Joins("LEFT JOIN users ON vulnerabilities.reporter_id = users.id").
+		Where("vulnerabilities.deleted_at IS NULL")
 
 	// 显示用户相关的漏洞：自己提交的 + 作为团队Leader时团队成员被指派的漏洞
 	if len(memberIDs) > 0 {
@@ -269,6 +279,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 
 	// 当前用户名下的漏洞数量
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("assignee_id = ?", userID).
 		Count(&data.CurrentUserVulns.TotalCount)
 
@@ -279,6 +290,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 	}
 	db.Model(&models.Vulnerability{}).
 		Select("status, COUNT(*) as count").
+		Where("deleted_at IS NULL").
 		Where("assignee_id = ?", userID).
 		Group("status").
 		Scan(&userStatusStats)
@@ -290,6 +302,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 	// 当前用户即将到期漏洞数
 	sevenDaysLater := time.Now().AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
+		Where("deleted_at IS NULL").
 		Where("assignee_id = ? AND fix_deadline IS NOT NULL AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')",
 			userID, sevenDaysLater).
 		Count(&data.CurrentUserVulns.DueSoonCount)
@@ -302,7 +315,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 	db.Table("vulnerabilities").
 		Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 		Joins("JOIN users ON vulnerabilities.fixed_by = users.id").
-		Where("vulnerabilities.fixed_at >= ? AND vulnerabilities.fixed_at < ? AND vulnerabilities.fixed_by IS NOT NULL",
+		Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.fixed_at >= ? AND vulnerabilities.fixed_at < ? AND vulnerabilities.fixed_by IS NOT NULL",
 			currentMonth+"-01", getNextMonthStart(currentMonth)).
 		Group("users.id").
 		Order("count DESC").
@@ -314,7 +327,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 		db.Table("vulnerabilities").
 			Select("users.id as user_id, users.username, users.real_name, COUNT(*) as count").
 			Joins("JOIN users ON vulnerabilities.assignee_id = users.id").
-			Where("vulnerabilities.status IN ('fixed', 'closed', 'completed') AND vulnerabilities.updated_at >= ? AND vulnerabilities.updated_at < ? AND vulnerabilities.assignee_id IS NOT NULL",
+			Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.status IN ('fixed', 'closed', 'completed') AND vulnerabilities.updated_at >= ? AND vulnerabilities.updated_at < ? AND vulnerabilities.assignee_id IS NOT NULL",
 				currentMonth+"-01", getNextMonthStart(currentMonth)).
 			Group("users.id").
 			Order("count DESC").
@@ -330,7 +343,7 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 		Select("vulnerabilities.id, vulnerabilities.title, vulnerabilities.severity, vulnerabilities.status, vulnerabilities.submitted_at, vulnerabilities.fix_deadline, projects.name as project_name, users.real_name as reporter_name").
 		Joins("LEFT JOIN projects ON vulnerabilities.project_id = projects.id").
 		Joins("LEFT JOIN users ON vulnerabilities.reporter_id = users.id").
-		Where("vulnerabilities.assignee_id = ?", userID).
+		Where("vulnerabilities.deleted_at IS NULL AND vulnerabilities.assignee_id = ?", userID).
 		Order("vulnerabilities.submitted_at DESC").
 		Limit(10).
 		Scan(&latestVulns)
