@@ -917,6 +917,15 @@ export default function DashboardPage() {
 
     const userStats = dashboardData.current_user_vulns;
     const statusEntries = Object.entries(userStats.status_stats);
+    const totalAssigned = userStats.total_count || 0;
+
+    const knownProgressTotal =
+      Number(statusEntries.find(([status]) => status === 'unfixed')?.[1] || 0) +
+      Number(statusEntries.find(([status]) => status === 'fixing')?.[1] || 0) +
+      Number(statusEntries.find(([status]) => status === 'fixed')?.[1] || 0) +
+      Number(statusEntries.find(([status]) => status === 'completed')?.[1] || 0);
+
+    const otherStatusCount = Math.max(0, totalAssigned - knownProgressTotal);
 
     // 修复进度数据 - 使用真实的用户状态统计数据
     const progressData = [
@@ -935,7 +944,11 @@ export default function DashboardPage() {
       {
         stage: '已完成',
         count: Number(statusEntries.find(([status]) => status === 'completed')?.[1] || 0)
-      }
+      },
+      {
+        stage: '其他状态',
+        count: otherStatusCount
+      },
     ].filter(item => item.count > 0); // 过滤掉数量为0的项目，使图表更清晰
 
     // 环形进度图配置 - 替换原来的漏斗图
@@ -984,7 +997,8 @@ export default function DashboardPage() {
               '待修复': '#ff4d4f',
               '修复中': '#fa8c16',
               '已修复': '#52c41a',
-              '已完成': '#1890ff'
+              '已完成': '#1890ff',
+              '其他状态': '#94a3b8'
             };
             return colorMap[datum.stage] || '#d9d9d9';
           },
@@ -1023,7 +1037,8 @@ export default function DashboardPage() {
               '待修复': '#ff4d4f',
               '修复中': '#fa8c16',
               '已修复': '#52c41a',
-              '已完成': '#1890ff'
+              '已完成': '#1890ff',
+              '其他状态': '#94a3b8'
             };
             return colorMap[datum.stage] || '#d9d9d9';
           }
@@ -1034,7 +1049,6 @@ export default function DashboardPage() {
     // 获取修复效率分析图表配置
     const getEfficiencySpec = () => {
       // 计算修复效率数据
-      const totalAssigned = userStats.total_count;
       const completed = progressData.find(d => d.stage === '已完成')?.count || 0;
       const fixed = progressData.find(d => d.stage === '已修复')?.count || 0;
       const fixing = progressData.find(d => d.stage === '修复中')?.count || 0;
@@ -1115,7 +1129,7 @@ export default function DashboardPage() {
                   color: 'var(--semi-color-text-0)',
                   marginBottom: '4px'
                 }}>
-                  {progressData.reduce((sum, item) => sum + item.count, 0)}
+                  {totalAssigned}
                 </div>
                 <div style={{
                   fontSize: '12px',

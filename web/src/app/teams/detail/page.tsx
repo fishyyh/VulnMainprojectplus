@@ -30,6 +30,7 @@ import {
   IconRefresh,
   IconSearch,
   IconEyeOpened,
+  IconDownload,
 } from '@douyinfe/semi-icons';
 import MarkdownEditor from '@/components/MarkdownEditor';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -73,6 +74,8 @@ export default function TeamDetailPage() {
   const [vulnPage, setVulnPage] = useState(1);
   const [vulnPageSize] = useState(10);
   const [vulnLoading, setVulnLoading] = useState(false);
+  const [selectedVulnIds, setSelectedVulnIds] = useState<number[]>([]);
+  const [exportingVulns, setExportingVulns] = useState(false);
 
   // Vuln filters
   const [filterSeverity, setFilterSeverity] = useState<string>('');
@@ -118,6 +121,7 @@ export default function TeamDetailPage() {
   const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
   const isSecurityEngineer = roleCode === 'security_engineer';
   const canManageVuln = isAdmin || isSecurityEngineer;
+  const canExportVulnReport = isAdmin || isSecurityEngineer;
 
   // ========== Helpers ==========
 
@@ -146,6 +150,10 @@ export default function TeamDetailPage() {
       loadVulns();
     }
   }, [team, activeTabKey, vulnPage, filterSeverity, filterStatus, filterKeyword]);
+
+  useEffect(() => {
+    setSelectedVulnIds(prev => prev.filter(id => vulns.some(vuln => vuln.id === id)));
+  }, [vulns]);
 
   useEffect(() => {
     if (!vulnDetailModalVisible) {
@@ -480,6 +488,71 @@ export default function TeamDetailPage() {
     }
   };
 
+  const handleExportVulns = async (format: 'excel' | 'word' = 'excel') => {
+    if (!canExportVulnReport) {
+      Toast.error('当前角色无权限导出漏洞报告');
+      return;
+    }
+
+    if (selectedVulnIds.length === 0) {
+      Toast.warning('请选择要导出的漏洞');
+      return;
+    }
+
+    setExportingVulns(true);
+    try {
+      const blob = await vulnApi.exportVulnsReport({
+        vuln_ids: selectedVulnIds,
+        team_id: parseInt(teamId),
+        format,
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const extension = format === 'word' ? 'doc' : 'xlsx';
+      a.download = `team_vuln_report_${teamId}_${new Date().getTime()}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      Toast.success(format === 'word' ? 'Word 报告导出成功' : 'Excel 报告导出成功');
+      setSelectedVulnIds([]);
+    } catch (error: any) {
+      console.error('导出漏洞报告失败:', error);
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const parsed = JSON.parse(text);
+          Toast.error(parsed?.msg || '导出漏洞报告失败');
+        } catch {
+          Toast.error('导出漏洞报告失败');
+        }
+      } else {
+        Toast.error(error?.response?.data?.msg || error?.message || '导出漏洞报告失败');
+      }
+    } finally {
+      setExportingVulns(false);
+    }
+  };
+
+  const handleSelectAllVulns = (checked: boolean) => {
+    if (checked) {
+      setSelectedVulnIds(vulns.map(vuln => vuln.id));
+    } else {
+      setSelectedVulnIds([]);
+    }
+  };
+
+  const handleSelectVuln = (vulnId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedVulnIds(prev => Array.from(new Set([...prev, vulnId])));
+    } else {
+      setSelectedVulnIds(prev => prev.filter(id => id !== vulnId));
+    }
+  };
+
   const handleAddComment = async () => {
     if (!viewingVuln || !commentText.trim()) {
       Toast.warning('请输入评论内容');
@@ -699,6 +772,25 @@ export default function TeamDetailPage() {
   // ========== Table Columns ==========
 
   const vulnColumns = [
+    ...(canExportVulnReport ? [{
+      title: (
+        <input
+          type="checkbox"
+          checked={selectedVulnIds.length === vulns.length && vulns.length > 0}
+          onChange={(e) => handleSelectAllVulns(e.target.checked)}
+        />
+      ),
+      dataIndex: 'select',
+      key: 'select',
+      width: 50,
+      render: (_text: string, record: Vulnerability) => (
+        <input
+          type="checkbox"
+          checked={selectedVulnIds.includes(record.id)}
+          onChange={(e) => handleSelectVuln(record.id, e.target.checked)}
+        />
+      ),
+    }] : []),
     {
       title: '漏洞标题',
       dataIndex: 'title',
@@ -1024,11 +1116,34 @@ export default function TeamDetailPage() {
                 />
                 <Button icon={<IconRefresh />} onClick={() => loadVulns()}>刷新</Button>
               </Space>
-              {canManageVuln && (
-                <Button type="primary" theme="solid" icon={<IconPlus />} onClick={handleCreateVuln}>
-                  创建漏洞
-                </Button>
-              )}
+              <Space wrap>
+                {canExportVulnReport && selectedVulnIds.length > 0 && (
+                  <>
+                    <Text type="secondary">已选择 {selectedVulnIds.length} 项</Text>
+                    <Button
+                      icon={<IconDownload />}
+                      onClick={() => handleExportVulns('excel')}
+                      loading={exportingVulns}
+                      disabled={selectedVulnIds.length === 0}
+                    >
+                      导出Excel
+                    </Button>
+                    <Button
+                      icon={<IconDownload />}
+                      onClick={() => handleExportVulns('word')}
+                      loading={exportingVulns}
+                      disabled={selectedVulnIds.length === 0}
+                    >
+                      导出Word
+                    </Button>
+                  </>
+                )}
+                {canManageVuln && (
+                  <Button type="primary" theme="solid" icon={<IconPlus />} onClick={handleCreateVuln}>
+                    创建漏洞
+                  </Button>
+                )}
+              </Space>
             </div>
 
             {/* Vuln Table */}

@@ -88,6 +88,8 @@ export default function ProjectDetailPage() {
   const [vulnLoading, setVulnLoading] = useState(false);
   const [editingVuln, setEditingVuln] = useState<Vulnerability | null>(null);
   const [vulnFormRef, setVulnFormRef] = useState<any>(null);
+  const [selectedVulnIds, setSelectedVulnIds] = useState<number[]>([]);
+  const [exportingVulns, setExportingVulns] = useState(false);
 
   // 漏洞详情相关状态
   const [vulnDetailModalVisible, setVulnDetailModalVisible] = useState(false);
@@ -151,6 +153,7 @@ export default function ProjectDetailPage() {
   const isAdmin = roleCode === 'super_admin' || roleCode === 'admin';
   const isSecurityEngineer = roleCode === 'security_engineer';
   const isDevEngineer = roleCode === 'dev_engineer';
+  const canExportVulnReport = isAdmin || isSecurityEngineer;
 
   // 项目过期检查
   const isProjectExpired = (project: Project) => {
@@ -175,6 +178,10 @@ export default function ProjectDetailPage() {
       loadAssets();
     }
   }, [project, activeTabKey]);
+
+  useEffect(() => {
+    setSelectedVulnIds(prev => prev.filter(id => vulnerabilities.some(vuln => vuln.id === id)));
+  }, [vulnerabilities]);
 
   // 监听弹窗状态变化，控制页面滚动
   useEffect(() => {
@@ -1105,6 +1112,70 @@ export default function ProjectDetailPage() {
     return false;
   };
 
+  const handleExportVulns = async (format: 'excel' | 'word' = 'excel') => {
+    if (!canExportVulnReport) {
+      Toast.error('当前角色无权限导出漏洞报告');
+      return;
+    }
+
+    if (selectedVulnIds.length === 0) {
+      Toast.warning('请选择要导出的漏洞');
+      return;
+    }
+
+    setExportingVulns(true);
+    try {
+      const blob = await vulnApi.exportVulnsReport({
+        vuln_ids: selectedVulnIds,
+        project_id: parseInt(projectId),
+        format,
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const extension = format === 'word' ? 'doc' : 'xlsx';
+      a.download = `vuln_report_${projectId}_${new Date().getTime()}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      Toast.success(format === 'word' ? 'Word 报告导出成功' : 'Excel 报告导出成功');
+      setSelectedVulnIds([]);
+    } catch (error: any) {
+      console.error('导出漏洞报告失败:', error);
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const parsed = JSON.parse(text);
+          Toast.error(parsed?.msg || '导出漏洞报告失败');
+        } catch {
+          Toast.error('导出漏洞报告失败');
+        }
+      } else {
+        Toast.error(error?.response?.data?.msg || error?.message || '导出漏洞报告失败');
+      }
+    } finally {
+      setExportingVulns(false);
+    }
+  };
+
+  const handleSelectAllVulns = (checked: boolean) => {
+    if (checked) {
+      setSelectedVulnIds(vulnerabilities.map(vuln => vuln.id));
+    } else {
+      setSelectedVulnIds([]);
+    }
+  };
+
+  const handleSelectVuln = (vulnId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedVulnIds(prev => Array.from(new Set([...prev, vulnId])));
+    } else {
+      setSelectedVulnIds(prev => prev.filter(id => id !== vulnId));
+    }
+  };
 
 
   // 处理批量导出
@@ -1158,6 +1229,25 @@ export default function ProjectDetailPage() {
 
   // 漏洞表格列定义
   const vulnColumns = [
+    ...(canExportVulnReport ? [{
+      title: (
+        <input
+          type="checkbox"
+          checked={selectedVulnIds.length === vulnerabilities.length && vulnerabilities.length > 0}
+          onChange={(e) => handleSelectAllVulns(e.target.checked)}
+        />
+      ),
+      dataIndex: 'select',
+      key: 'select',
+      width: 50,
+      render: (text: string, record: Vulnerability) => (
+        <input
+          type="checkbox"
+          checked={selectedVulnIds.includes(record.id)}
+          onChange={(e) => handleSelectVuln(record.id, e.target.checked)}
+        />
+      ),
+    }] : []),
     {
       title: '漏洞标题',
       dataIndex: 'title',
@@ -1651,33 +1741,61 @@ export default function ProjectDetailPage() {
             itemKey="vulnerabilities"
           >
             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-              {(isAdmin || isSecurityEngineer) && (
-                <Button
-                  theme="solid"
-                  type="primary"
-                  icon={<IconPlus />}
-                  onClick={handleCreateVuln}
-                  disabled={project && isProjectExpired(project)}
-                >
-                  添加漏洞
-                </Button>
-              )}
-              {project && isProjectExpired(project) && (
-                <div style={{
-                  marginLeft: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: 'var(--semi-color-danger)',
-                  fontSize: '12px'
-                }}>
-                  <IconInfoCircle style={{ marginRight: '4px' }} />
-                  项目已过期，无法添加漏洞
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div>
+                  {canExportVulnReport && selectedVulnIds.length > 0 && (
+                    <Space>
+                      <Text type="secondary">已选择 {selectedVulnIds.length} 项</Text>
+                      <Button
+                        icon={<IconDownload />}
+                        onClick={() => handleExportVulns('excel')}
+                        loading={exportingVulns}
+                        disabled={selectedVulnIds.length === 0}
+                      >
+                        导出Excel
+                      </Button>
+                      <Button
+                        icon={<IconDownload />}
+                        onClick={() => handleExportVulns('word')}
+                        loading={exportingVulns}
+                        disabled={selectedVulnIds.length === 0}
+                      >
+                        导出Word
+                      </Button>
+                    </Space>
+                  )}
                 </div>
-              )}
+                <div>
+                  {(isAdmin || isSecurityEngineer) && (
+                    <Button
+                      theme="solid"
+                      type="primary"
+                      icon={<IconPlus />}
+                      onClick={handleCreateVuln}
+                      disabled={project && isProjectExpired(project)}
+                    >
+                      添加漏洞
+                    </Button>
+                  )}
+                  {project && isProjectExpired(project) && (
+                    <div style={{
+                      marginLeft: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: 'var(--semi-color-danger)',
+                      fontSize: '12px'
+                    }}>
+                      <IconInfoCircle style={{ marginRight: '4px' }} />
+                      项目已过期，无法添加漏洞
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <Table
               columns={vulnColumns}
               dataSource={vulnerabilities}
+              rowKey="id"
               loading={vulnLoading}
               pagination={{
                 showSizeChanger: true,

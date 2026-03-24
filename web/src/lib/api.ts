@@ -1369,6 +1369,14 @@ export const vulnApi = {
     return response.data;
   },
 
+  // 批量导出漏洞报告
+  exportVulnsReport: async (data: { vuln_ids: number[]; project_id?: number; team_id?: number; format?: 'excel' | 'word' }): Promise<Blob> => {
+    const response = await api.post('/vulns/export', data, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   // 获取漏洞时间线
   getVulnTimeline: async (id: number): Promise<ApiResponse<VulnTimeline[]>> => {
     const response = await api.get(`/vulns/${id}/timeline`);

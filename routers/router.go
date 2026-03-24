@@ -139,6 +139,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 		{
 			vulnViewAPI.GET("", api.GetVulnList)                                   // 获取漏洞列表
 			vulnViewAPI.GET("/stats", api.GetVulnStats)                            // 获取漏洞统计信息
+			vulnViewAPI.POST("/export", api.ExportVulns)                           // 批量导出漏洞报告
 			vulnViewAPI.GET("/:id", api.GetVuln)                                   // 获取漏洞详情
 			vulnViewAPI.PUT("/:id/status", api.UpdateVulnStatus)                   // 更新漏洞状态（进入业务层做细粒度校验）
 			vulnViewAPI.PUT("/:id/fix", api.FixVuln)                               // 修复漏洞（服务层校验被指派人或管理角色）
