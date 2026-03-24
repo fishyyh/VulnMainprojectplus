@@ -12,6 +12,7 @@ interface MarkdownEditorProps {
   placeholder?: string;
   height?: number;
   disabled?: boolean;
+  autoFocus?: boolean;
 }
 
 export default function MarkdownEditor({
@@ -19,7 +20,8 @@ export default function MarkdownEditor({
   onChange,
   placeholder = '请输入内容...',
   height = 300,
-  disabled = false
+  disabled = false,
+  autoFocus = false
 }: MarkdownEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [allowedTypes, setAllowedTypes] = useState<string[]>(['jpg', 'jpeg', 'png', 'gif']); // 默认允许的图片类型
@@ -228,6 +230,7 @@ export default function MarkdownEditor({
         textareaProps={{
           placeholder,
           disabled,
+          autoFocus,
           onPaste: handlePasteImage,
           style: {
             fontSize: 14,

@@ -99,6 +99,10 @@ export default function ProjectDetailPage() {
   const [changingVuln, setChangingVuln] = useState<Vulnerability | null>(null);
   const [statusChangeFormRef, setStatusChangeFormRef] = useState<any>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [retestModalVisible, setRetestModalVisible] = useState(false);
+  const [retestTargetVuln, setRetestTargetVuln] = useState<Vulnerability | null>(null);
+  const [retestTargetStatus, setRetestTargetStatus] = useState<'completed' | 'unfixed' | ''>('');
+  const [retestEvidence, setRetestEvidence] = useState<string>('');
 
   // 时间线相关状态
   const [vulnTimeline, setVulnTimeline] = useState<VulnTimeline[]>([]);
@@ -433,6 +437,20 @@ export default function ProjectDetailPage() {
     setStatusChangeModalVisible(true);
   };
 
+  const openRetestEvidenceModal = (vuln: Vulnerability, status: 'completed' | 'unfixed') => {
+    setRetestTargetVuln(vuln);
+    setRetestTargetStatus(status);
+    setRetestEvidence('');
+    setRetestModalVisible(true);
+  };
+
+  const closeRetestEvidenceModal = () => {
+    setRetestModalVisible(false);
+    setRetestTargetVuln(null);
+    setRetestTargetStatus('');
+    setRetestEvidence('');
+  };
+
   // 保存状态变更
   const handleSaveStatusChange = async (values: any) => {
     if (!changingVuln) return;
@@ -672,7 +690,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleUpdateVulnStatus = async (vulnId: number, status: string, extraData?: any) => {
+  const handleUpdateVulnStatus = async (vulnId: number, status: string, extraData?: any): Promise<boolean> => {
     try {
       await vulnApi.updateVulnStatus(vulnId, { status, ...extraData });
       Toast.success('更新漏洞状态成功');
@@ -693,9 +711,35 @@ export default function ProjectDetailPage() {
           console.error('刷新漏洞详情失败:', refreshError);
         }
       }
+      return true;
     } catch (error: any) {
       console.error('Error updating vulnerability status:', error);
       Toast.error(error?.response?.data?.msg || error?.message || '更新漏洞状态失败');
+      return false;
+    }
+  };
+
+  const handleSubmitRetestEvidence = async () => {
+    if (!retestTargetVuln || !retestTargetStatus) {
+      return;
+    }
+
+    if (!retestEvidence.trim()) {
+      Toast.error('请填写复测验证说明（支持文字或图片）');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const payload: VulnStatusUpdateRequest = {
+      status: retestTargetStatus,
+      retest_result: retestEvidence.trim(),
+      retest_at: now,
+      ...(retestTargetStatus === 'completed' ? { completed_at: now } : {}),
+    };
+
+    const updated = await handleUpdateVulnStatus(retestTargetVuln.id, retestTargetStatus, payload);
+    if (updated) {
+      closeRetestEvidenceModal();
     }
   };
 
@@ -1298,9 +1342,7 @@ export default function ProjectDetailPage() {
                 theme="borderless"
                 type="secondary"
                 size="small"
-                onClick={() => handleUpdateVulnStatus(record.id, 'completed', {
-                  completed_at: new Date().toISOString()
-                })}
+                onClick={() => openRetestEvidenceModal(record, 'completed')}
               >
                 修复完成
               </Button>
@@ -1308,15 +1350,7 @@ export default function ProjectDetailPage() {
                 theme="borderless"
                 type="tertiary"
                 size="small"
-                onClick={() => {
-                  const reason = prompt('复测不通过原因：');
-                  if (reason) {
-                    handleUpdateVulnStatus(record.id, 'unfixed', {
-                      retest_result: reason,
-                      retest_at: new Date().toISOString()
-                    });
-                  }
-                }}
+                onClick={() => openRetestEvidenceModal(record, 'unfixed')}
               >
                 复测不通过
               </Button>
@@ -2466,10 +2500,9 @@ export default function ProjectDetailPage() {
                     padding: '16px',
                     backgroundColor: '#f0fdf4',
                     borderRadius: '6px',
-                    whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word'
                   }}>
-                    <Text>{viewingVuln.retest_result}</Text>
+                    <MarkdownViewer content={viewingVuln.retest_result} />
                   </div>
                 </div>
               )}
@@ -2479,6 +2512,36 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        title={retestTargetStatus === 'completed' ? '复测通过验证' : '复测不通过说明'}
+        visible={retestModalVisible}
+        onCancel={closeRetestEvidenceModal}
+        footer={null}
+        width={760}
+        maskClosable={false}
+      >
+        <div>
+          <Text type="secondary">
+            请填写复测结论，支持文字说明与图片上传（Markdown 格式）。
+          </Text>
+          <div style={{ marginTop: '12px' }}>
+            <MarkdownEditor
+              value={retestEvidence}
+              onChange={(value) => setRetestEvidence(value || '')}
+              placeholder="例如：已验证关键路径，无未授权访问；可上传截图作为修复凭证。"
+              height={260}
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+            <Button onClick={closeRetestEvidenceModal}>取消</Button>
+            <Button theme="solid" type="primary" onClick={handleSubmitRetestEvidence}>
+              提交复测结果
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* 资产创建/编辑弹窗 */}

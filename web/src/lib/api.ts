@@ -1248,6 +1248,9 @@ export interface VulnStatusUpdateRequest {
   status: string;
   comment?: string;
   reject_reason?: string;
+  retest_result?: string;
+  retest_at?: string;
+  completed_at?: string;
   resubmitted_at?: string;
   resubmitted_by?: number;
 }

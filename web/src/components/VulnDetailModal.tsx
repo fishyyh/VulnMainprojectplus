@@ -390,10 +390,9 @@ export default function VulnDetailModal({ visible, onCancel, vuln }: VulnDetailM
                 padding: '16px',
                 backgroundColor: '#f0fdf4',
                 borderRadius: '6px',
-                whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word'
               }}>
-                <Text>{vuln.retest_result}</Text>
+                <MarkdownViewer content={vuln.retest_result} />
               </div>
             </div>
           )}
