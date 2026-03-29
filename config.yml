@@ -1,0 +1,13 @@
+#服务端口
+server:
+  port : 5000
+
+#数据库配置
+datasource:
+  driverName : mysql
+  host : 127.0.0.1
+  port : 3306
+  database : vulnmain
+  username : root
+  password : your_password
+  charset : utf8
