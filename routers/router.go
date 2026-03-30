@@ -343,6 +343,7 @@ func InitRouter(r *gin.Engine) *gin.Engine {
 
 			// 周报历史记录管理
 			weeklyReportAPI.GET("/history", api.GetWeeklyReportHistory)             // 获取周报历史记录
+			weeklyReportAPI.DELETE("/history/:id", api.DeleteWeeklyReport)          // 删除周报记录
 			weeklyReportAPI.GET("/file/:id/preview", api.PreviewWeeklyReportFile)   // 预览历史周报文件
 			weeklyReportAPI.GET("/file/:id/download", api.DownloadWeeklyReportFile) // 下载历史周报文件
 		}

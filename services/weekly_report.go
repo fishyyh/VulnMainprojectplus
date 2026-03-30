@@ -58,22 +58,30 @@ type ProjectWeeklyRanking struct {
 
 // GenerateWeeklyReport 生成周报数据，refDate 为周内任意一天，传零值则使用当前时间
 func (s *WeeklyReportService) GenerateWeeklyReport(refDate time.Time) (*WeeklyReportData, error) {
-	db := Init.GetDB()
-
 	if refDate.IsZero() {
 		refDate = time.Now()
 	}
-	// 计算所在周的开始和结束时间
 	weekStart := getWeekStart(refDate)
 	weekEnd := getWeekEnd(refDate)
-	now := refDate
-	
+	return s.generateReportForRange(weekStart, weekEnd)
+}
+
+// GenerateWeeklyReportByRange 生成指定日期范围的周报数据
+func (s *WeeklyReportService) GenerateWeeklyReportByRange(startDate, endDate time.Time) (*WeeklyReportData, error) {
+	endDate = endDate.Truncate(24 * time.Hour).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	return s.generateReportForRange(startDate, endDate)
+}
+
+// generateReportForRange 按指定时间段生成周报数据（内部方法）
+func (s *WeeklyReportService) generateReportForRange(weekStart, weekEnd time.Time) (*WeeklyReportData, error) {
+	db := Init.GetDB()
+
 	report := &WeeklyReportData{
 		WeekStart:     weekStart.Format("2006-01-02"),
 		WeekEnd:       weekEnd.Format("2006-01-02"),
 		SeverityStats: make(map[string]int64),
 		StatusStats:   make(map[string]int64),
-		GeneratedAt:   now,
+		GeneratedAt:   time.Now(),
 	}
 	
 	// 统计本周提交的漏洞数量
@@ -407,35 +415,45 @@ func (s *WeeklyReportService) GenerateWeeklyReportPDF(data *WeeklyReportData) ([
 
 // SendWeeklyReport 生成周报并保存，配置了管理员邮箱时自动发送；refDate 为零值时使用当前时间
 func (s *WeeklyReportService) SendWeeklyReport(refDate time.Time) error {
-	db := Init.GetDB()
-
-	// 生成周报数据
 	data, err := s.GenerateWeeklyReport(refDate)
 	if err != nil {
 		return fmt.Errorf("生成周报数据失败: %v", err)
 	}
-
-	// 生成PDF
 	pdfData, err := s.GenerateWeeklyReportPDF(data)
 	if err != nil {
 		return fmt.Errorf("生成PDF失败: %v", err)
 	}
+	return s.saveAndSendReport(data, pdfData)
+}
 
-	// 生成文件名
-	weekStartFormatted := data.WeekStart // 格式：2006-01-02
-	weekStartFormatted = weekStartFormatted[:4] + weekStartFormatted[5:7] + weekStartFormatted[8:10] // 转换为：20060102
+// SendWeeklyReportByRange 生成并发送指定日期范围的周报
+func (s *WeeklyReportService) SendWeeklyReportByRange(startDate, endDate time.Time) error {
+	data, err := s.GenerateWeeklyReportByRange(startDate, endDate)
+	if err != nil {
+		return fmt.Errorf("生成周报数据失败: %v", err)
+	}
+	pdfData, err := s.GenerateWeeklyReportPDF(data)
+	if err != nil {
+		return fmt.Errorf("生成PDF失败: %v", err)
+	}
+	return s.saveAndSendReport(data, pdfData)
+}
+
+// saveAndSendReport 保存周报记录并发送邮件（内部方法）
+func (s *WeeklyReportService) saveAndSendReport(data *WeeklyReportData, pdfData []byte) error {
+	db := Init.GetDB()
+
+	weekStartFormatted := data.WeekStart
+	weekStartFormatted = weekStartFormatted[:4] + weekStartFormatted[5:7] + weekStartFormatted[8:10]
 	fileName := generateFileName(weekStartFormatted)
 
-	// 保存PDF文件
 	filePath, err := s.savePDFFile(pdfData, fileName)
 	if err != nil {
 		return fmt.Errorf("保存PDF文件失败: %v", err)
 	}
 
-	// 获取系统管理员邮箱（未配置时返回空字符串，不报错）
 	adminEmail, _ := s.getAdminEmail()
 
-	// 创建周报记录
 	weeklyReport := &models.WeeklyReport{
 		WeekStart:       data.WeekStart,
 		WeekEnd:         data.WeekEnd,
@@ -446,7 +464,7 @@ func (s *WeeklyReportService) SendWeeklyReport(refDate time.Time) error {
 		TotalFixed:      data.TotalFixed,
 		TotalFixing:     data.TotalFixing,
 		TotalRetesting:  data.TotalRetesting,
-		GeneratedBy:     1, // 系统自动生成
+		GeneratedBy:     1,
 		GeneratedByName: "系统自动",
 		SentTo:          adminEmail,
 		Status:          "generated",
@@ -454,29 +472,24 @@ func (s *WeeklyReportService) SendWeeklyReport(refDate time.Time) error {
 		UpdatedAt:       time.Now(),
 	}
 
-	// 保存到数据库
 	if err := db.Create(weeklyReport).Error; err != nil {
 		return fmt.Errorf("保存周报记录失败: %v", err)
 	}
 
-	// 未配置邮箱时跳过发送，周报已生成成功
 	if adminEmail == "" {
 		return nil
 	}
 
-	// 发送邮件
 	subject := fmt.Sprintf("周报 - 漏洞管理系统 (%s - %s)", data.WeekStart, data.WeekEnd)
 	body := s.generateEmailBody(data)
 
 	err = SendEmailWithAttachment(adminEmail, subject, body, fileName, pdfData)
 	if err != nil {
-		// 更新状态为发送失败（周报已生成，仅邮件失败）
 		weeklyReport.Status = "failed"
 		db.Save(weeklyReport)
 		return fmt.Errorf("周报已生成，但邮件发送失败: %v", err)
 	}
 
-	// 更新状态为已发送
 	now := time.Now()
 	weeklyReport.Status = "sent"
 	weeklyReport.SentAt = &now

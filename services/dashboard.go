@@ -91,6 +91,7 @@ func (s *DashboardService) GetDashboardData(userID uint, roleCode string) (*Dash
 func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, error) {
 	data := &DashboardData{
 		VulnStatusStats: make(map[string]int64),
+		SeverityStats:   make(map[string]int64),
 	}
 
 	// 总漏洞数
@@ -103,10 +104,11 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 
 	// 即将到期漏洞数（今天起7天内）
 	now := time.Now()
-	sevenDaysLater := now.AddDate(0, 0, 7)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	sevenDaysLater := startOfToday.AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
 		Where("deleted_at IS NULL").
-		Where("fix_deadline IS NOT NULL AND fix_deadline >= ? AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')", now, sevenDaysLater).
+		Where("fix_deadline IS NOT NULL AND fix_deadline >= ? AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')", startOfToday, sevenDaysLater).
 		Count(&data.DueSoonVulns)
 
 	// 漏洞状态统计
@@ -123,6 +125,44 @@ func (s *DashboardService) getSuperAdminDashboard(db *gorm.DB) (*DashboardData, 
 	for _, stat := range statusStats {
 		data.VulnStatusStats[stat.Status] = stat.Count
 	}
+
+	// 严重程度统计（排除已删除漏洞）
+	var severityStats []struct {
+		Severity string `json:"severity"`
+		Count    int64  `json:"count"`
+	}
+	db.Model(&models.Vulnerability{}).
+		Select("severity, COUNT(*) as count").
+		Where("deleted_at IS NULL").
+		Group("severity").
+		Scan(&severityStats)
+	for _, stat := range severityStats {
+		data.SeverityStats[stat.Severity] = stat.Count
+	}
+
+	// 近7天趋势数据（排除已删除漏洞）
+	trendData := make([]TrendDataItem, 7)
+	for i := 6; i >= 0; i-- {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day()-i, 0, 0, 0, 0, time.Local)
+		dayEnd := dayStart.Add(24 * time.Hour)
+		var newVulns, fixedVulns, pendingVulns int64
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND submitted_at >= ? AND submitted_at < ?", dayStart, dayEnd).
+			Count(&newVulns)
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND fixed_at >= ? AND fixed_at < ?", dayStart, dayEnd).
+			Count(&fixedVulns)
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND submitted_at >= ? AND submitted_at < ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored', 'rejected')", dayStart, dayEnd).
+			Count(&pendingVulns)
+		trendData[6-i] = TrendDataItem{
+			Date:         dayStart.Format("01-02"),
+			NewVulns:     newVulns,
+			FixedVulns:   fixedVulns,
+			PendingVulns: pendingVulns,
+		}
+	}
+	data.TrendData = trendData
 
 	// 安全工程师排行榜（当月提交漏洞数）
 	currentMonth := time.Now().Format("2006-01")
@@ -223,11 +263,12 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 
 	// 当前用户即将到期漏洞数（今天起7天内）
 	now := time.Now()
-	sevenDaysLater := now.AddDate(0, 0, 7)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	sevenDaysLater := startOfToday.AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
 		Where("deleted_at IS NULL").
 		Where("reporter_id = ? AND fix_deadline IS NOT NULL AND fix_deadline >= ? AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')",
-			userID, now, sevenDaysLater).
+			userID, startOfToday, sevenDaysLater).
 		Count(&data.CurrentUserVulns.DueSoonCount)
 
 	// 安全工程师排行榜
@@ -274,6 +315,7 @@ func (s *DashboardService) getSecurityEngineerDashboard(db *gorm.DB, userID uint
 func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*DashboardData, error) {
 	data := &DashboardData{
 		VulnStatusStats: make(map[string]int64),
+		SeverityStats:   make(map[string]int64),
 		CurrentUserVulns: &UserVulnStats{
 			StatusStats: make(map[string]int64),
 		},
@@ -303,12 +345,51 @@ func (s *DashboardService) getDevEngineerDashboard(db *gorm.DB, userID uint) (*D
 
 	// 当前用户即将到期漏洞数（今天起7天内）
 	now := time.Now()
-	sevenDaysLater := now.AddDate(0, 0, 7)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	sevenDaysLater := startOfToday.AddDate(0, 0, 7)
 	db.Model(&models.Vulnerability{}).
 		Where("deleted_at IS NULL").
 		Where("assignee_id = ? AND fix_deadline IS NOT NULL AND fix_deadline >= ? AND fix_deadline <= ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored')",
-			userID, now, sevenDaysLater).
+			userID, startOfToday, sevenDaysLater).
 		Count(&data.CurrentUserVulns.DueSoonCount)
+
+	// 严重程度统计（当前用户指派漏洞，排除已删除）
+	var devSeverityStats []struct {
+		Severity string `json:"severity"`
+		Count    int64  `json:"count"`
+	}
+	db.Model(&models.Vulnerability{}).
+		Select("severity, COUNT(*) as count").
+		Where("deleted_at IS NULL AND assignee_id = ?", userID).
+		Group("severity").
+		Scan(&devSeverityStats)
+	for _, stat := range devSeverityStats {
+		data.SeverityStats[stat.Severity] = stat.Count
+	}
+
+	// 近7天趋势数据（当前用户指派漏洞，排除已删除）
+	devTrendData := make([]TrendDataItem, 7)
+	for i := 6; i >= 0; i-- {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day()-i, 0, 0, 0, 0, time.Local)
+		dayEnd := dayStart.Add(24 * time.Hour)
+		var newVulns, fixedVulns, pendingVulns int64
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND assignee_id = ? AND submitted_at >= ? AND submitted_at < ?", userID, dayStart, dayEnd).
+			Count(&newVulns)
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND assignee_id = ? AND fixed_at >= ? AND fixed_at < ?", userID, dayStart, dayEnd).
+			Count(&fixedVulns)
+		db.Model(&models.Vulnerability{}).
+			Where("deleted_at IS NULL AND assignee_id = ? AND submitted_at >= ? AND submitted_at < ? AND status NOT IN ('fixed', 'completed', 'closed', 'ignored', 'rejected')", userID, dayStart, dayEnd).
+			Count(&pendingVulns)
+		devTrendData[6-i] = TrendDataItem{
+			Date:         dayStart.Format("01-02"),
+			NewVulns:     newVulns,
+			FixedVulns:   fixedVulns,
+			PendingVulns: pendingVulns,
+		}
+	}
+	data.TrendData = devTrendData
 
 	// 研发工程师排行榜（当月修复完成漏洞数）
 	currentMonth := time.Now().Format("2006-01")

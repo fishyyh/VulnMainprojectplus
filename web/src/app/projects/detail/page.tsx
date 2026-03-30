@@ -1318,9 +1318,11 @@ export default function ProjectDetailPage() {
         if (!deadline) return '-';
 
         const deadlineDate = new Date(deadline);
-        const now = new Date();
-        const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
-        const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+        const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
+        const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
         return (
           <div>
@@ -2216,9 +2218,11 @@ export default function ProjectDetailPage() {
                           fontWeight: '600',
                           color: (() => {
                             const deadlineDate = new Date(viewingVuln.fix_deadline);
-                            const now = new Date();
-                            const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(viewingVuln.status);
-                            const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+                            const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(viewingVuln.status);
+                            const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
                             if (isOverdue) return '#ff4d4f';
                             if (daysDiff <= 3) return '#fa8c16';
@@ -2228,9 +2232,11 @@ export default function ProjectDetailPage() {
                           borderRadius: '4px',
                           backgroundColor: (() => {
                             const deadlineDate = new Date(viewingVuln.fix_deadline);
-                            const now = new Date();
-                            const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(viewingVuln.status);
-                            const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+                            const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(viewingVuln.status);
+                            const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
                             if (isOverdue) return 'rgba(255, 77, 79, 0.1)';
                             if (daysDiff <= 3) return 'rgba(250, 140, 22, 0.1)';

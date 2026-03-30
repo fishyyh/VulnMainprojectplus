@@ -30,6 +30,21 @@ func parseWeekDate(c *gin.Context) time.Time {
 	return t
 }
 
+// parseDateRangeParams 从查询参数 start_date/end_date 解析日期范围，返回是否成功
+func parseDateRangeParams(c *gin.Context) (startDate, endDate time.Time, ok bool) {
+	startStr := c.Query("start_date")
+	endStr := c.Query("end_date")
+	if startStr == "" || endStr == "" {
+		return
+	}
+	s, err1 := time.ParseInLocation("2006-01-02", startStr, time.Local)
+	e, err2 := time.ParseInLocation("2006-01-02", endStr, time.Local)
+	if err1 != nil || err2 != nil {
+		return
+	}
+	return s, e, true
+}
+
 // GetWeeklyReportData 获取周报数据
 func GetWeeklyReportData(c *gin.Context) {
 	data, err := weeklyReportService.GenerateWeeklyReport(parseWeekDate(c))
@@ -175,10 +190,14 @@ func ManualSendWeeklyReport(c *gin.Context) {
 
 // ManualGenerateWeeklyReport 手动生成并发送周报
 func ManualGenerateWeeklyReport(c *gin.Context) {
-	// 直接调用周报服务生成并发送周报
 	weeklyReportService := &services.WeeklyReportService{}
 
-	err := weeklyReportService.SendWeeklyReport(parseWeekDate(c))
+	var err error
+	if startDate, endDate, ok := parseDateRangeParams(c); ok {
+		err = weeklyReportService.SendWeeklyReportByRange(startDate, endDate)
+	} else {
+		err = weeklyReportService.SendWeeklyReport(parseWeekDate(c))
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": 500,
@@ -327,6 +346,34 @@ func PreviewWeeklyReportFile(c *gin.Context) {
 
 	// 返回PDF数据
 	c.Data(http.StatusOK, "application/pdf", fileData)
+}
+
+// DeleteWeeklyReport 删除周报记录及文件
+func DeleteWeeklyReport(c *gin.Context) {
+	reportID := c.Param("id")
+	if reportID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "msg": "周报ID不能为空"})
+		return
+	}
+
+	db := Init.GetDB()
+	var report models.WeeklyReport
+	if err := db.Where("id = ?", reportID).First(&report).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "周报记录不存在"})
+		return
+	}
+
+	// 删除文件（文件不存在时不报错）
+	if report.FilePath != "" {
+		os.Remove(report.FilePath)
+	}
+
+	if err := db.Delete(&report).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "删除周报失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "删除成功"})
 }
 
 // DownloadWeeklyReportFile 下载周报PDF文件

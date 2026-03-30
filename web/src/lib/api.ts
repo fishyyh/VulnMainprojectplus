@@ -380,11 +380,20 @@ export const authApi = {
 };
 
 // 仪表板数据类型定义
+export interface TrendDataItem {
+  date: string;
+  new_vulns: number;
+  fixed_vulns: number;
+  pending_vulns: number;
+}
+
 export interface DashboardData {
   total_vulns: number;
   total_projects: number;
   due_soon_vulns: number;
   vuln_status_stats: Record<string, number>;
+  severity_stats?: Record<string, number>;
+  trend_data?: TrendDataItem[];
   security_engineer_ranking?: EngineerRankingItem[];
   dev_engineer_ranking?: EngineerRankingItem[];
   latest_vulns: VulnListItem[];
@@ -775,9 +784,18 @@ export const weeklyReportApi = {
     return response.data;
   },
 
-  // 手动生成并发送周报
-  generateWeeklyReport: async (): Promise<ApiResponse<void>> => {
-    const response = await api.post('/system/weekly-report/generate');
+  // 手动生成并发送周报（可选指定日期范围）
+  generateWeeklyReport: async (startDate?: string, endDate?: string): Promise<ApiResponse<void>> => {
+    const params: Record<string, string> = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    const response = await api.post('/system/weekly-report/generate', null, { params });
+    return response.data;
+  },
+
+  // 删除周报记录
+  deleteWeeklyReport: async (id: number): Promise<ApiResponse<void>> => {
+    const response = await api.delete(`/system/weekly-report/history/${id}`);
     return response.data;
   },
 

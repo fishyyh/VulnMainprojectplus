@@ -836,9 +836,11 @@ export default function TeamDetailPage() {
       render: (deadline: string, record: Vulnerability) => {
         if (!deadline) return '-';
         const deadlineDate = new Date(deadline);
-        const now = new Date();
-        const isOverdue = deadlineDate < now && record.status !== 'completed';
-        const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+        const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
+        const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         return (
           <div>
             <Text

@@ -16,7 +16,9 @@ import {
   Table,
   Tag,
   Modal,
-  Select
+  Select,
+  DatePicker,
+  Popconfirm
 } from '@douyinfe/semi-ui';
 import {
   IconSave,
@@ -88,6 +90,7 @@ export default function SettingsPage() {
   const [weeklyReports, setWeeklyReports] = useState<any[]>([]);
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportDateRange, setReportDateRange] = useState<Date[]>([]);
 
   // LDAP相关状态
   const [testingLDAP, setTestingLDAP] = useState(false);
@@ -739,10 +742,13 @@ export default function SettingsPage() {
   const handleGenerateReport = async () => {
     setGeneratingReport(true);
     try {
-      const response = await weeklyReportApi.generateWeeklyReport();
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const response = await weeklyReportApi.generateWeeklyReport(
+        reportDateRange[0] ? fmt(reportDateRange[0]) : undefined,
+        reportDateRange[1] ? fmt(reportDateRange[1]) : undefined
+      );
       if (response.code === 200) {
         Toast.success('周报生成并发送成功');
-        // 重新加载周报列表
         loadWeeklyReports(weeklyReportPagination.page, weeklyReportPagination.pageSize);
       } else {
         Toast.error(response.msg || '生成周报失败');
@@ -752,6 +758,22 @@ export default function SettingsPage() {
       Toast.error('生成周报失败');
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  // 删除周报
+  const handleDeleteReport = async (reportId: number) => {
+    try {
+      const response = await weeklyReportApi.deleteWeeklyReport(reportId);
+      if (response.code === 200) {
+        Toast.success('删除成功');
+        loadWeeklyReports(weeklyReportPagination.page, weeklyReportPagination.pageSize);
+      } else {
+        Toast.error(response.msg || '删除失败');
+      }
+    } catch (error) {
+      console.error('删除周报失败:', error);
+      Toast.error('删除失败');
     }
   };
 
@@ -968,15 +990,24 @@ export default function SettingsPage() {
                   <Title heading={4}>周报历史记录</Title>
                   <Text type="secondary">查看和管理系统自动生成的周报记录</Text>
                 </div>
-                <Button
-                  theme="solid"
-                  type="primary"
-                  loading={generatingReport}
-                  onClick={handleGenerateReport}
-                  style={{ flexShrink: 0 }}
-                >
-                  {generatingReport ? '生成中...' : '立即生成周报'}
-                </Button>
+                <Space>
+                  <DatePicker
+                    type="dateRange"
+                    placeholder={['开始日期', '结束日期']}
+                    value={reportDateRange as any}
+                    onChange={(v) => setReportDateRange((v as Date[]) ?? [])}
+                    style={{ width: 240 }}
+                  />
+                  <Button
+                    theme="solid"
+                    type="primary"
+                    loading={generatingReport}
+                    onClick={handleGenerateReport}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {generatingReport ? '生成中...' : '立即生成周报'}
+                  </Button>
+                </Space>
               </div>
 
               <Table
@@ -1070,6 +1101,21 @@ export default function SettingsPage() {
                         >
                           下载
                         </Button>
+                        <Popconfirm
+                          title="确认删除"
+                          content="删除后不可恢复，确认删除该周报？"
+                          onConfirm={() => handleDeleteReport(record.id)}
+                          okText="删除"
+                          cancelText="取消"
+                        >
+                          <Button
+                            theme="borderless"
+                            type="danger"
+                            size="small"
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>
                       </Space>
                     ),
                   },

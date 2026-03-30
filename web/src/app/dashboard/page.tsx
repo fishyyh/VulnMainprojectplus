@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, Typography, Button, Space, Table, Badge, Progress, List, Avatar } from '@douyinfe/semi-ui';
 import { IconUser, IconCalendar, IconAt, IconArrowUp, IconSafe, IconBolt } from '@douyinfe/semi-icons';
 import { VChart } from '@visactor/react-vchart';
-import { authApi, authUtils, DashboardData, EngineerRankingItem, VulnListItem } from '@/lib/api';
+import { authApi, authUtils, DashboardData, EngineerRankingItem, VulnListItem, TrendDataItem } from '@/lib/api';
 
 const { Title, Text } = Typography;
 
@@ -195,21 +195,41 @@ export default function DashboardPage() {
       status: status
     }));
 
-    // 严重程度分布数据 - 从最新漏洞中统计真实数据
-    const severityStats: { [key: string]: number } = {};
-    (dashboardData.latest_vulns || []).forEach(vuln => {
-      const severity = vuln.severity || 'unknown';
-      severityStats[severity] = (severityStats[severity] || 0) + 1;
-    });
+    // 严重程度分布数据 - 优先使用后端统计（已排除已删除漏洞），回退到本地计算
+    let severityData: { severity: string; count: number; color: string }[];
+    const backendSeverity = dashboardData.severity_stats;
+    if (backendSeverity && Object.keys(backendSeverity).length > 0) {
+      severityData = Object.entries(backendSeverity).map(([severity, count]) => ({
+        severity: severity.charAt(0).toUpperCase() + severity.slice(1),
+        count: count as number,
+        color: getSeverityHexColor(severity)
+      }));
+    } else {
+      const severityStats: { [key: string]: number } = {};
+      (dashboardData.latest_vulns || []).forEach(vuln => {
+        const severity = vuln.severity || 'unknown';
+        severityStats[severity] = (severityStats[severity] || 0) + 1;
+      });
+      severityData = Object.entries(severityStats).map(([severity, count]) => ({
+        severity: severity.charAt(0).toUpperCase() + severity.slice(1),
+        count: count,
+        color: getSeverityHexColor(severity)
+      }));
+    }
 
-    const severityData = Object.entries(severityStats).map(([severity, count]) => ({
-      severity: severity.charAt(0).toUpperCase() + severity.slice(1),
-      count: count,
-      color: getSeverityHexColor(severity)
-    }));
-
-    // 趋势数据 - 基于最新漏洞的提交时间统计真实数据
-    const trendData = generateTrendDataFromVulns(dashboardData.latest_vulns || []);
+    // 趋势数据 - 优先使用后端统计（已排除已删除漏洞），回退到本地计算
+    let trendData: ReturnType<typeof generateTrendDataFromVulns>;
+    const backendTrend = dashboardData.trend_data;
+    if (backendTrend && backendTrend.length > 0) {
+      trendData = backendTrend.map((item: TrendDataItem) => ({
+        date: item.date,
+        '新增漏洞': item.new_vulns,
+        '已修复': item.fixed_vulns,
+        '待修复': item.pending_vulns,
+      }));
+    } else {
+      trendData = generateTrendDataFromVulns(dashboardData.latest_vulns || []);
+    }
 
     // 排行榜数据 - 使用真实排行榜数据
     const rankingData = (dashboardData.security_engineer_ranking || []).map((item, index) => ({
@@ -520,9 +540,11 @@ export default function DashboardPage() {
                   if (!deadline) return '-';
 
                   const deadlineDate = new Date(deadline);
-                  const now = new Date();
-                  const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
-                  const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+                  const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
+                  const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
                   return (
                     <div>
@@ -875,9 +897,11 @@ export default function DashboardPage() {
                   if (!deadline) return '-';
 
                   const deadlineDate = new Date(deadline);
-                  const now = new Date();
-                  const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
-                  const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+                  const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
+                  const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
                   return (
                     <div>
@@ -1224,9 +1248,11 @@ export default function DashboardPage() {
                   if (!deadline) return '-';
 
                   const deadlineDate = new Date(deadline);
-                  const now = new Date();
-                  const isOverdue = deadlineDate < now && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
-                  const daysDiff = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const deadlineDay = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+                  const isOverdue = deadlineDay < today && !['fixed', 'completed', 'closed', 'ignored'].includes(record.status);
+                  const daysDiff = Math.round((deadlineDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
                   return (
                     <div>
